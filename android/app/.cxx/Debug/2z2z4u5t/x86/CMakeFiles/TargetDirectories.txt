@@ -1,0 +1,2 @@
+D:/intern/MobiStore-main/android/app/.cxx/Debug/2z2z4u5t/x86/CMakeFiles/edit_cache.dir
+D:/intern/MobiStore-main/android/app/.cxx/Debug/2z2z4u5t/x86/CMakeFiles/rebuild_cache.dir

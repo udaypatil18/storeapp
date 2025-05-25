@@ -1,8 +1,13 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:mobistore/Authentication/login.dart';
 import 'package:mobistore/home.dart';
+import 'package:mobistore/Authentication/sing_up.dart';
+import 'package:firebase_core/firebase_core.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MobiStore());
 }
 
@@ -14,7 +19,7 @@ class MobiStore extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'MobiStore',
-      home: LoginPage(),
+      home: SignUpPage(),
       debugShowCheckedModeBanner: false,
     );
   }

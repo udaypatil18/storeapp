@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobistore/home.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class LoginPage extends StatefulWidget {
   @override
@@ -169,28 +170,48 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  void _login() {
-    // Add your login logic here
-    if (_usernameController.text.isNotEmpty &&
-        _passwordController.text.isNotEmpty) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => HomePage(),
-        ),
-      );
-    } else {
-      // Show error message
+
+// Inside your _LoginPageState class:
+
+  void _login() async {
+    final email = _usernameController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Please enter username and password',
-            style: GoogleFonts.roboto(),
-          ),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+
+      // Navigate to HomePage on successful login
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => HomePage()),
+      );
+    } on FirebaseAuthException catch (e) {
+      String errorMessage = '';
+      if (e.code == 'user-not-found') {
+        errorMessage = 'No user found for that email.';
+      } else if (e.code == 'wrong-password') {
+        errorMessage = 'Wrong password provided.';
+      } else {
+        errorMessage = 'Login failed. Please try again.';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('An error occurred. Try again.')),
       );
     }
   }
+
 
   void _forgotPassword() {
     // Add forgot password logic
