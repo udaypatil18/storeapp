@@ -321,7 +321,7 @@ class _ProductPageState extends State<ProductPage> {
   List<Product> _filterProducts() {
     return products.where((product) {
       final matchesSearch =
-          product.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      product.name.toLowerCase().contains(_searchQuery.toLowerCase());
       final matchesStatus =
           _filterStatus == null || product.getOverallStatus() == _filterStatus;
       return matchesSearch && matchesStatus;
@@ -332,7 +332,7 @@ class _ProductPageState extends State<ProductPage> {
   void _showEditVariationStockDialog(
       Product product, ProductVariation variation) {
     final stockController =
-        TextEditingController(text: variation.stock.toString());
+    TextEditingController(text: variation.stock.toString());
 
     showDialog(
       context: context,
@@ -549,22 +549,22 @@ class _ProductPageState extends State<ProductPage> {
                       ),
                       child: tempImagePath != null
                           ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(tempImagePath!),
-                                fit: BoxFit.cover,
-                              ),
-                            )
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(tempImagePath!),
+                          fit: BoxFit.cover,
+                        ),
+                      )
                           : Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.image,
-                                      size: 50, color: Colors.grey),
-                                  Text('No Image Selected'),
-                                ],
-                              ),
-                            ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.image,
+                                size: 50, color: Colors.grey),
+                            Text('No Image Selected'),
+                          ],
+                        ),
+                      ),
                     ),
                     SizedBox(height: 10),
 
@@ -920,7 +920,7 @@ class _ProductPageState extends State<ProductPage> {
                   decoration: BoxDecoration(
                     color: primaryColor,
                     borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(20)),
+                    BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Row(
                     children: [
@@ -1148,8 +1148,8 @@ class _ProductPageState extends State<ProductPage> {
     String statusText = status == ProductStatus.inStock
         ? 'In Stock'
         : status == ProductStatus.lowStock
-            ? 'Low Stock'
-            : 'Out of Stock';
+        ? 'Low Stock'
+        : 'Out of Stock';
 
     return Container(
       padding: EdgeInsets.symmetric(
@@ -1175,9 +1175,9 @@ class _ProductPageState extends State<ProductPage> {
 // Create a combined edit dialog for both stock and price
   void _showEditVariationDialog(Product product, ProductVariation variation) {
     final TextEditingController stockController =
-        TextEditingController(text: variation.stock.toString());
+    TextEditingController(text: variation.stock.toString());
     final TextEditingController priceController =
-        TextEditingController(text: variation.price.toString());
+    TextEditingController(text: variation.price.toString());
 
     showDialog(
       context: context,
@@ -1372,263 +1372,263 @@ class _ProductPageState extends State<ProductPage> {
           Expanded(
             child: filteredProducts.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: 100,
-                          color: Colors.grey,
-                        ),
-                        SizedBox(height: 24),
-                        Text(
-                          'No products found',
-                          style: TextStyle(
-                            fontSize: 20,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        if (_searchQuery.isNotEmpty || _filterStatus != null)
-                          TextButton.icon(
-                            icon: Icon(Icons.refresh),
-                            label: Text('Clear filters'),
-                            onPressed: () {
-                              setState(() {
-                                searchController.clear();
-                                _searchQuery = '';
-                                _filterStatus = null;
-                              });
-                            },
-                          )
-                        else
-                          TextButton.icon(
-                            icon: Icon(Icons.add),
-                            label: Text('Add your first product'),
-                            onPressed: _showAddProductDialog,
-                          ),
-                      ],
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.inventory_2_outlined,
+                    size: 100,
+                    color: Colors.grey,
+                  ),
+                  SizedBox(height: 24),
+                  Text(
+                    'No products found',
+                    style: TextStyle(
+                      fontSize: 20,
+                      color: Colors.grey[600],
                     ),
-                  )
+                  ),
+                  SizedBox(height: 8),
+                  if (_searchQuery.isNotEmpty || _filterStatus != null)
+                    TextButton.icon(
+                      icon: Icon(Icons.refresh),
+                      label: Text('Clear filters'),
+                      onPressed: () {
+                        setState(() {
+                          searchController.clear();
+                          _searchQuery = '';
+                          _filterStatus = null;
+                        });
+                      },
+                    )
+                  else
+                    TextButton.icon(
+                      icon: Icon(Icons.add),
+                      label: Text('Add your first product'),
+                      onPressed: _showAddProductDialog,
+                    ),
+                ],
+              ),
+            )
                 : ListView.builder(
-                    padding: EdgeInsets.all(16),
-                    itemCount: filteredProducts.length,
-                    itemBuilder: (context, index) {
-                      final product = filteredProducts[index];
-                      final status = product.getOverallStatus();
-                      final totalStock = product.getTotalStock();
-                      final statusColor = _getStatusColor(status);
+              padding: EdgeInsets.all(16),
+              itemCount: filteredProducts.length,
+              itemBuilder: (context, index) {
+                final product = filteredProducts[index];
+                final status = product.getOverallStatus();
+                final totalStock = product.getTotalStock();
+                final statusColor = _getStatusColor(status);
 
-                      return Card(
-                        margin: EdgeInsets.only(bottom: 16),
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: InkWell(
-                          onTap: () => _viewProductVariations(product),
-                          child: Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                return Card(
+                  margin: EdgeInsets.only(bottom: 16),
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: InkWell(
+                    onTap: () => _viewProductVariations(product),
+                    child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Product Image
+                          GestureDetector(
+                            onTap: () => _showImageOptionsDialog(product),
+                            child: Container(
+                              width: 80,
+                              height: 80,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(8),
+                                image: product.imagePath != null
+                                    ? DecorationImage(
+                                  image: FileImage(
+                                      File(product.imagePath!)),
+                                  fit: BoxFit.cover,
+                                )
+                                    : null,
+                              ),
+                              child: product.imagePath == null
+                                  ? Icon(
+                                Icons.camera_alt,
+                                color: Colors.grey[400],
+                              )
+                                  : null,
+                            ),
+                          ),
+                          SizedBox(width: 16),
+
+                          // Product Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
-                                // Product Image
-                                GestureDetector(
-                                  onTap: () => _showImageOptionsDialog(product),
-                                  child: Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[200],
-                                      borderRadius: BorderRadius.circular(8),
-                                      image: product.imagePath != null
-                                          ? DecorationImage(
-                                              image: FileImage(
-                                                  File(product.imagePath!)),
-                                              fit: BoxFit.cover,
-                                            )
-                                          : null,
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        product.name,
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
-                                    child: product.imagePath == null
-                                        ? Icon(
-                                            Icons.camera_alt,
-                                            color: Colors.grey[400],
-                                          )
-                                        : null,
-                                  ),
-                                ),
-                                SizedBox(width: 16),
-
-                                // Product Info
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              product.name,
-                                              style: TextStyle(
-                                                fontSize: 18,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ),
-                                          PopupMenuButton(
-                                            icon: Icon(Icons.more_vert),
-                                            onSelected: (value) {
-                                              if (value == 'edit') {
-                                                _showImageOptionsDialog(
-                                                    product);
-                                              } else if (value == 'delete') {
-                                                _deleteProduct(product);
-                                              }
-                                            },
-                                            itemBuilder: (context) => [
-                                              PopupMenuItem(
-                                                value: 'edit',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(Icons.edit, size: 18),
-                                                    SizedBox(width: 8),
-                                                    Text('Edit Image'),
-                                                  ],
-                                                ),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                child: Row(
-                                                  children: [
-                                                    Icon(Icons.delete,
-                                                        size: 18,
-                                                        color: Colors.red),
-                                                    SizedBox(width: 8),
-                                                    Text('Delete Product',
-                                                        style: TextStyle(
-                                                            color: Colors.red)),
-                                                  ],
-                                                ),
-                                              ),
+                                    PopupMenuButton(
+                                      icon: Icon(Icons.more_vert),
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          _showImageOptionsDialog(
+                                              product);
+                                        } else if (value == 'delete') {
+                                          _deleteProduct(product);
+                                        }
+                                      },
+                                      itemBuilder: (context) => [
+                                        PopupMenuItem(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit, size: 18),
+                                              SizedBox(width: 8),
+                                              Text('Edit Image'),
                                             ],
                                           ),
-                                        ],
-                                      ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        'Category: ${product.category}',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
                                         ),
-                                      ),
-                                      SizedBox(height: 8),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color:
-                                                  statusColor.withOpacity(0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: statusColor),
-                                            ),
-                                            child: Text(
-                                              _getStatusLabel(status),
-                                              style: TextStyle(
-                                                color: statusColor,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
+                                        PopupMenuItem(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.delete,
+                                                  size: 18,
+                                                  color: Colors.red),
+                                              SizedBox(width: 8),
+                                              Text('Delete Product',
+                                                  style: TextStyle(
+                                                      color: Colors.red)),
+                                            ],
                                           ),
-                                          SizedBox(width: 8),
-                                          Text(
-                                            'Stock: $totalStock units',
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Category: ${product.category}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 2,
                                       ),
-                                      SizedBox(height: 4),
-                                      Text(
-                                        'Last Restocked: ${DateFormat('MMM dd, yyyy').format(product.lastRestocked)}',
+                                      decoration: BoxDecoration(
+                                        color:
+                                        statusColor.withOpacity(0.1),
+                                        borderRadius:
+                                        BorderRadius.circular(12),
+                                        border: Border.all(
+                                            color: statusColor),
+                                      ),
+                                      child: Text(
+                                        _getStatusLabel(status),
                                         style: TextStyle(
-                                          color: Colors.grey[600],
+                                          color: statusColor,
                                           fontSize: 12,
+                                          fontWeight: FontWeight.bold,
                                         ),
                                       ),
-                                      SizedBox(height: 8),
-                                      product.variations.isNotEmpty
-                                          ? Row(
-                                              children: [
-                                                Icon(
-                                                  Icons.list,
-                                                  size: 14,
-                                                  color: Colors.grey[600],
-                                                ),
-                                                SizedBox(width: 4),
-                                                Text(
-                                                  '${product.variations.length} variations',
-                                                  style: TextStyle(
-                                                    color: Colors.grey[600],
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                Spacer(),
-                                                Text(
-                                                  'View Details',
-                                                  style: TextStyle(
-                                                    color: primaryColor,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                                Icon(
-                                                  Icons.arrow_forward_ios,
-                                                  size: 12,
-                                                  color: primaryColor,
-                                                ),
-                                              ],
-                                            )
-                                          : Container(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: accentColor
-                                                    .withOpacity(0.1),
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                                border: Border.all(
-                                                    color: accentColor),
-                                              ),
-                                              child: Text(
-                                                'No variations - Add now',
-                                                style: TextStyle(
-                                                  color: accentColor,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                    ],
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Stock: $totalStock units',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Last Restocked: ${DateFormat('MMM dd, yyyy').format(product.lastRestocked)}',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                product.variations.isNotEmpty
+                                    ? Row(
+                                  children: [
+                                    Icon(
+                                      Icons.list,
+                                      size: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      '${product.variations.length} variations',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    Spacer(),
+                                    Text(
+                                      'View Details',
+                                      style: TextStyle(
+                                        color: primaryColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 12,
+                                      color: primaryColor,
+                                    ),
+                                  ],
+                                )
+                                    : Container(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: accentColor
+                                        .withOpacity(0.1),
+                                    borderRadius:
+                                    BorderRadius.circular(12),
+                                    border: Border.all(
+                                        color: accentColor),
+                                  ),
+                                  child: Text(
+                                    'No variations - Add now',
+                                    style: TextStyle(
+                                      color: accentColor,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      );
-                    },
+                        ],
+                      ),
+                    ),
                   ),
+                );
+              },
+            ),
           ),
         ],
       ),

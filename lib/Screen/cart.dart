@@ -137,7 +137,7 @@ class _CartPageState extends State<CartPage> {
     }
 
     final selectedItems =
-        CartManager.instance.items.where((item) => item.isSelected).toList();
+    CartManager.instance.items.where((item) => item.isSelected).toList();
 
     final pdf = pw.Document();
 
@@ -170,38 +170,38 @@ class _CartPageState extends State<CartPage> {
                         padding: pw.EdgeInsets.all(5),
                         child: pw.Text('Item',
                             style:
-                                pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                       ),
                       pw.Padding(
                         padding: pw.EdgeInsets.all(5),
                         child: pw.Text('Size',
                             style:
-                                pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                       ),
                       pw.Padding(
                         padding: pw.EdgeInsets.all(5),
                         child: pw.Text('Qty',
                             style:
-                                pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                            pw.TextStyle(fontWeight: pw.FontWeight.bold)),
                       ),
                     ],
                   ),
                   ...selectedItems.map((item) => pw.TableRow(
-                        children: [
-                          pw.Padding(
-                            padding: pw.EdgeInsets.all(5),
-                            child: pw.Text(item.product.name),
-                          ),
-                          pw.Padding(
-                            padding: pw.EdgeInsets.all(5),
-                            child: pw.Text(item.variation.size),
-                          ),
-                          pw.Padding(
-                            padding: pw.EdgeInsets.all(5),
-                            child: pw.Text('${item.quantity}'),
-                          ),
-                        ],
-                      )),
+                    children: [
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text(item.product.name),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text(item.variation.size),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('${item.quantity}'),
+                      ),
+                    ],
+                  )),
                 ],
               ),
               pw.SizedBox(height: 20),
@@ -236,7 +236,7 @@ class _CartPageState extends State<CartPage> {
     }
 
     final selectedItems =
-        CartManager.instance.items.where((item) => item.isSelected).toList();
+    CartManager.instance.items.where((item) => item.isSelected).toList();
 
     showDialog(
       context: context,
@@ -256,12 +256,12 @@ class _CartPageState extends State<CartPage> {
             Text('Order Summary:'),
             SizedBox(height: 8),
             ...selectedItems.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4.0),
-                  child: Text(
-                    '• ${item.product.name} (${item.variation.size}) x ${item.quantity}',
-                    style: TextStyle(fontSize: 14),
-                  ),
-                )),
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: Text(
+                '• ${item.product.name} (${item.variation.size}) x ${item.quantity}',
+                style: TextStyle(fontSize: 14),
+              ),
+            )),
           ],
         ),
         actions: [
@@ -316,25 +316,25 @@ class _CartPageState extends State<CartPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ...dealersList.map((dealer) => RadioListTile<Dealer>(
-                  title: Text(dealer.name),
-                  subtitle: Text(dealer.location),
-                  value: dealer,
-                  groupValue: selectedDealer,
-                  onChanged: (Dealer? value) {
-                    // Use dialogContext to pop the dialog
-                    Navigator.of(dialogContext).pop();
+              title: Text(dealer.name),
+              subtitle: Text(dealer.location),
+              value: dealer,
+              groupValue: selectedDealer,
+              onChanged: (Dealer? value) {
+                // Use dialogContext to pop the dialog
+                Navigator.of(dialogContext).pop();
 
-                    // Update state if still mounted
-                    if (mounted) {
-                      setState(() {
-                        selectedDealer = value;
-                      });
+                // Update state if still mounted
+                if (mounted) {
+                  setState(() {
+                    selectedDealer = value;
+                  });
 
-                      // Place order after selection if mounted
-                      _placeOrder();
-                    }
-                  },
-                )),
+                  // Place order after selection if mounted
+                  _placeOrder();
+                }
+              },
+            )),
           ],
         ),
         actions: [
@@ -385,7 +385,7 @@ class _CartPageState extends State<CartPage> {
           ? _buildEmptyCart()
           : _buildCartList(),
       bottomNavigationBar:
-          CartManager.instance.items.isEmpty ? null : _buildCheckoutBar(),
+      CartManager.instance.items.isEmpty ? null : _buildCheckoutBar(),
     );
   }
 
@@ -461,16 +461,16 @@ class _CartPageState extends State<CartPage> {
                     borderRadius: BorderRadius.circular(8),
                     image: item.product.imagePath != null
                         ? DecorationImage(
-                            image: FileImage(File(item.product.imagePath!)),
-                            fit: BoxFit.cover,
-                          )
+                      image: FileImage(File(item.product.imagePath!)),
+                      fit: BoxFit.cover,
+                    )
                         : null,
                   ),
                   child: item.product.imagePath == null
                       ? Icon(
-                          Icons.image_not_supported_outlined,
-                          color: Colors.grey[400],
-                        )
+                    Icons.image_not_supported_outlined,
+                    color: Colors.grey[400],
+                  )
                       : null,
                 ),
                 SizedBox(width: 16),
@@ -643,8 +643,8 @@ class CartManager {
   void addItem(Product product, ProductVariation variation) {
     // Check if item already exists in cart
     final existingItemIndex = items.indexWhere(
-      (item) =>
-          item.product.id == product.id &&
+          (item) =>
+      item.product.id == product.id &&
           item.variation.size == variation.size,
     );
 

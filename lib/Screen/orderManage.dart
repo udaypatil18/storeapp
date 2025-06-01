@@ -224,7 +224,7 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
         ],
       ),
       body:
-          orderHistory.isEmpty ? _buildEmptyState() : _buildOrderHistoryList(),
+      orderHistory.isEmpty ? _buildEmptyState() : _buildOrderHistoryList(),
     );
   }
 
