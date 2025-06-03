@@ -1,8 +1,41 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 // Import the Dealer class and getDealers function from utility
+import '../firebase_services/dealer_firebase_service.dart';
 import '../utility/dealer.dart' as DealerUtil;
+class Dealer {
+  String? id;
+  final String name;
+  final String location;
+  final String contactNumber;
 
+  Dealer({
+    this.id,
+    required this.name,
+    required this.location,
+    required this.contactNumber,
+  });
+
+  // Add these methods to work with Firestore
+  factory Dealer.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Dealer(
+      id: doc.id,
+      name: data['name'] ?? '',
+      location: data['location'] ?? '',
+      contactNumber: data['contactNumber'] ?? '',
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'location': location,
+      'contactNumber': contactNumber,
+    };
+  }
+}
 class DealersPage extends StatefulWidget {
   const DealersPage({Key? key}) : super(key: key);
 
@@ -11,21 +44,17 @@ class DealersPage extends StatefulWidget {
 }
 
 class _DealersPageState extends State<DealersPage> {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   // Enhanced color palette
   final Color primaryColor = Color(0xFF006A4E); // Deep Teal
   final Color secondaryColor = Color(0xFF00876A); // Lighter Teal
   final Color accentColor = Color(0xFFFFA500); // Orange for alerts
   final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  // List to store dealers - using the Dealer class from utility
-  late List<DealerUtil.Dealer> dealers;
+  final DealerFirestoreService _dealerService = DealerFirestoreService();
 
-  @override
-  void initState() {
-    super.initState();
-    // Initialize dealers from the utility function
-    dealers = DealerUtil.getDealers();
-  }
+  // List to store dealers - using the Dealer class from utility
+
 
   // Controllers for the add dealer form
   final TextEditingController _nameController = TextEditingController();
@@ -125,7 +154,7 @@ class _DealersPageState extends State<DealersPage> {
   }
 
   // Method to add a new dealer
-  void _addDealer() {
+  void _addDealer() async {
     if (_nameController.text.isEmpty ||
         _contactController.text.isEmpty ||
         _locationController.text.isEmpty) {
@@ -138,33 +167,33 @@ class _DealersPageState extends State<DealersPage> {
       return;
     }
 
-    setState(() {
-      // Get the highest ID to assign a new ID
-      int newId = dealers.isEmpty
-          ? 1
-          : dealers.map((d) => d.id).reduce((a, b) => a > b ? a : b) + 1;
+    try {
+      // Add to Firestore
+      await _firestore.collection('dealers').add({
+        'name': _nameController.text,
+        'location': _locationController.text,
+        'contactNumber': _contactController.text,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
 
-      dealers.add(
-        DealerUtil.Dealer(
-          id: newId,
-          name: _nameController.text,
-          location: _locationController.text,
-          contactNumber: _contactController.text,
+      // Clear controllers and close bottom sheet
+      _nameController.clear();
+      _contactController.clear();
+      _locationController.clear();
+      _emailController.clear();
+      _addressController.clear();
+      Navigator.of(context).pop();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error adding dealer: $e'),
+          backgroundColor: Colors.red,
         ),
       );
-    });
-
-    // Clear controllers and close bottom sheet
-    _nameController.clear();
-    _contactController.clear();
-    _locationController.clear();
-    _emailController.clear();
-    _addressController.clear();
-    Navigator.of(context).pop();
+    }
   }
-
   // Method to delete a dealer
-  void _deleteDealer(DealerUtil.Dealer dealer) {
+  void _deleteDealer(Dealer dealer) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -179,11 +208,18 @@ class _DealersPageState extends State<DealersPage> {
             child: Text('Cancel', style: TextStyle(color: secondaryColor)),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                dealers.removeWhere((d) => d.id == dealer.id);
-              });
-              Navigator.of(context).pop();
+            onPressed: () async {
+              try {
+                await _firestore.collection('dealers').doc(dealer.id).delete();
+                Navigator.of(context).pop();
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error deleting dealer: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(backgroundColor: accentColor),
             child: const Text('Delete'),
@@ -209,7 +245,24 @@ class _DealersPageState extends State<DealersPage> {
         backgroundColor: primaryColor,
         elevation: 0,
       ),
-      body: dealers.isEmpty ? _buildEmptyState() : _buildDealersList(),
+      body:StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('dealers').snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          final dealers = snapshot.data?.docs
+              .map((doc) => Dealer.fromFirestore(doc))
+              .toList() ?? [];
+
+          return dealers.isEmpty ? _buildEmptyState() : _buildDealersList(dealers);
+        },
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDealerBottomSheet,
         icon: Icon(Icons.add, color: Colors.white),
@@ -251,7 +304,7 @@ class _DealersPageState extends State<DealersPage> {
     );
   }
 
-  Widget _buildDealersList() {
+  Widget _buildDealersList(List<Dealer> dealers) {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: dealers.length,
@@ -262,7 +315,7 @@ class _DealersPageState extends State<DealersPage> {
     );
   }
 
-  Widget _buildDealerCard(DealerUtil.Dealer dealer) {
+  Widget _buildDealerCard(Dealer dealer) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(
@@ -312,7 +365,6 @@ class _DealersPageState extends State<DealersPage> {
       ),
     );
   }
-
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [

@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
 import 'package:permission_handler/permission_handler.dart';
+
+import '../Resuable_widget/Products.dart';
+import '../firebase_services/firebase_service.dart';
 
 // Before taking/picking images
 Future<void> requestPermissions() async {
@@ -23,78 +27,6 @@ Future<void> requestPermissions() async {
   }
 }
 
-// Product Status Enum
-enum ProductStatus {
-  inStock,
-  lowStock,
-  outOfStock,
-}
-
-// Product Variation Model
-class ProductVariation {
-  String size;
-  int stock;
-  double price;
-
-  ProductStatus status;
-
-  ProductVariation({
-    required this.size,
-    required this.stock,
-    required this.price,
-    required this.status,
-  });
-
-  // Method to update stock and recalculate status
-  void updateStock(int newStock) {
-    stock = newStock;
-
-    if (stock == 0) {
-      status = ProductStatus.outOfStock;
-    } else if (stock <= 5) {
-      status = ProductStatus.lowStock;
-    } else {
-      status = ProductStatus.inStock;
-    }
-  }
-}
-
-// Product Model
-class Product {
-  int id;
-  String name;
-  String? imagePath;
-  String category;
-  DateTime lastRestocked;
-  List<ProductVariation> variations;
-
-  Product({
-    required this.id,
-    required this.name,
-    this.imagePath,
-    required this.category,
-    required this.lastRestocked,
-    required this.variations,
-  });
-
-  // Get overall status based on variations
-  ProductStatus getOverallStatus() {
-    if (variations.every((v) => v.status == ProductStatus.outOfStock)) {
-      return ProductStatus.outOfStock;
-    } else if (variations.any((v) => v.status == ProductStatus.lowStock) ||
-        variations.isEmpty) {
-      return ProductStatus.lowStock;
-    } else {
-      return ProductStatus.inStock;
-    }
-  }
-
-  // Get total stock across all variations
-  int getTotalStock() {
-    return variations.fold(0, (sum, variation) => sum + variation.stock);
-  }
-}
-
 class ProductPage extends StatefulWidget {
   const ProductPage({Key? key}) : super(key: key);
 
@@ -103,6 +35,88 @@ class ProductPage extends StatefulWidget {
 }
 
 class _ProductPageState extends State<ProductPage> {
+
+  final FirestoreService _firestoreService = FirestoreService();
+  List<Product> products = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() => isLoading = true);
+    try {
+      final loadedProducts = await _firestoreService.getProducts();
+      setState(() {
+        products = loadedProducts;
+        isLoading = false;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading products: $e')),
+      );
+      setState(() => isLoading = false);
+    }
+  }
+
+  // Update your existing _addNewProduct method
+  // Update your existing _addNewProduct method
+  Future<void> _addNewProduct(Product product) async {
+    try {
+      setState(() => isLoading = true); // Show loading indicator
+
+      // Add product to Firestore
+      String productId = await _firestoreService.addProduct(product);
+
+      // Update the product with the new ID
+      product.id = productId;
+
+      // Reload the products list
+      await _loadProducts();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Product added successfully')),
+      );
+    } catch (e) {
+      print('Error adding product: $e'); // Add logging
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding product: $e')),
+      );
+    } finally {
+      setState(() => isLoading = false); // Hide loading indicator
+    }
+  }
+
+  // Update your existing methods to use Firestore
+  // Update your existing methods to use Firestore
+  Future<void> _updateProduct(Product product) async {
+    if (product.id == null) {
+      print('Error: Product ID is null');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: Product ID is missing')),
+      );
+      return;
+    }
+
+    try {
+      setState(() => isLoading = true);
+      await _firestoreService.updateProduct(product.id!, product);
+      await _loadProducts();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Product updated successfully')),
+      );
+    } catch (e) {
+      print('Error updating product: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating product: $e')),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
   // Enhanced color palette
   final Color primaryColor = Color(0xFF006A4E); // Deep Teal
   final Color secondaryColor = Color(0xFF00876A); // Lighter Teal
@@ -133,81 +147,17 @@ class _ProductPageState extends State<ProductPage> {
   // Dealers list
   List<Dealer> dealersList = [];
 
-  // Products list
-  List<Product> products = [
-    Product(
-      id: 1,
-      name: 'Black Pepper',
-      category: 'Spices',
-      lastRestocked: DateTime.now().subtract(Duration(days: 30)),
-      variations: [
-        ProductVariation(
-          size: '100g',
-          stock: 15,
-          price: 30,
-          status: ProductStatus.inStock,
-        ),
-        ProductVariation(
-          size: '250g',
-          stock: 10,
-          price: 70,
-          status: ProductStatus.inStock,
-        ),
-      ],
-    ),
-    Product(
-      id: 2,
-      name: 'Milton Bottle',
-      category: 'Kitchenware',
-      lastRestocked: DateTime.now().subtract(Duration(days: 60)),
-      variations: [
-        ProductVariation(
-          size: '500ml',
-          stock: 0,
-          price: 200,
-          status: ProductStatus.outOfStock,
-        ),
-        ProductVariation(
-          size: '1L',
-          stock: 0,
-          price: 300,
-          status: ProductStatus.outOfStock,
-        ),
-      ],
-    ),
-    Product(
-      id: 3,
-      name: 'Salt',
-      category: 'Spices',
-      lastRestocked: DateTime.now().subtract(Duration(days: 45)),
-      variations: [
-        ProductVariation(
-          size: '500g',
-          stock: 5,
-          price: 20,
-          status: ProductStatus.lowStock,
-        ),
-        ProductVariation(
-          size: '1kg',
-          stock: 15,
-          price: 35,
-          status: ProductStatus.inStock,
-        ),
-      ],
-    ),
-  ];
-
   // Search and filter controllers
   TextEditingController searchController = TextEditingController();
   String _searchQuery = '';
   ProductStatus? _filterStatus;
 
-  @override
-  void initState() {
-    super.initState();
-    // Initialize dealers list
-    dealersList = getDealers();
-  }
+  // @override
+  // void initState() {
+  //   super.initState();
+  //   // Initialize dealers list
+  //   dealersList = getDealers();
+  // }
 
   // Take a picture with camera
   Future<void> _takePicture(Product product) async {
@@ -635,10 +585,9 @@ class _ProductPageState extends State<ProductPage> {
                 ),
                 ElevatedButton(
                   child: Text('Add Product'),
-                  onPressed: () {
+                  onPressed: () async{
                     // Validate inputs
-                    if (nameController.text.isEmpty ||
-                        categoryController.text.isEmpty) {
+                    if (nameController.text.isEmpty || categoryController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('Please fill all fields')),
                       );
@@ -647,19 +596,17 @@ class _ProductPageState extends State<ProductPage> {
 
                     // Add new product
                     final newProduct = Product(
-                      id: products.length + 1,
                       name: nameController.text,
                       imagePath: tempImagePath,
                       category: categoryController.text,
                       lastRestocked: DateTime.now(),
-                      variations: [],
+                      variations: [], // Empty variations list
                     );
 
-                    setState(() {
-                      products.add(newProduct);
-                    });
-
                     Navigator.of(context).pop();
+
+                    // Add product to Firestore
+                    await _addNewProduct(newProduct);
 
                     // Show add variation dialog
                     _showAddVariationDialog(newProduct);

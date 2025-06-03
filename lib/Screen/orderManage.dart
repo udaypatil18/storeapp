@@ -1,6 +1,10 @@
+
+// Enum for order status
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../Resuable_widget/Products.dart';
+import '../firebase_services/order_firebase_service.dart';
 
 class OrderManagementPage extends StatefulWidget {
   @override
@@ -8,49 +12,16 @@ class OrderManagementPage extends StatefulWidget {
 }
 
 class _OrderManagementPageState extends State<OrderManagementPage> {
+  final OrderFirestoreService _orderService = OrderFirestoreService();
+
   // Enhanced color palette
-  final Color primaryColor = Color(0xFF006A4E); // Deep Teal
-  final Color secondaryColor = Color(0xFF00876A); // Lighter Teal
-  final Color accentColor = Color(0xFFFFA500); // Orange for alerts
-  final Color backgroundColor = Color(0xFFF5F5F5); // Light background
-
-  // Dummy dealers list
-  List<String> dealers = [
-    'Supplier A',
-    'Supplier B',
-    'Supplier C',
-  ];
-
-  // Dummy order history
-  List<OrderItem> orderHistory = [
-    OrderItem(
-      id: '001',
-      productName: 'Organic Spices Mix',
-      dealer: 'Supplier A',
-      quantity: 50,
-      date: DateTime.now().subtract(Duration(days: 5)),
-      status: OrderStatus.completed,
-    ),
-    OrderItem(
-      id: '002',
-      productName: 'Cooking Utensil Set',
-      dealer: 'Supplier B',
-      quantity: 25,
-      date: DateTime.now().subtract(Duration(days: 10)),
-      status: OrderStatus.inProgress,
-    ),
-    OrderItem(
-      id: '003',
-      productName: 'Kitchen Appliance',
-      dealer: 'Supplier C',
-      quantity: 10,
-      date: DateTime.now().subtract(Duration(days: 15)),
-      status: OrderStatus.pending,
-    ),
-  ];
+  final Color primaryColor = Color(0xFF006A4E);
+  final Color secondaryColor = Color(0xFF00876A);
+  final Color accentColor = Color(0xFFFFA500);
+  final Color backgroundColor = Color(0xFFF5F5F5);
 
   void _showOrderDialog(Product product) {
-    String selectedDealer = dealers.first;
+    String? selectedDealer;
     int quantity = 1;
 
     showDialog(
@@ -69,61 +40,81 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    value: selectedDealer,
-                    dropdownColor: backgroundColor,
-                    decoration: InputDecoration(
-                      labelText: 'Select Dealer',
-                      labelStyle: TextStyle(color: primaryColor),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: primaryColor),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: primaryColor, width: 2),
-                      ),
-                    ),
-                    items: dealers.map((String dealer) {
-                      return DropdownMenuItem<String>(
-                        value: dealer,
-                        child: Text(
-                          dealer,
-                          style: TextStyle(color: primaryColor),
+              content: StreamBuilder<List<String>>(
+                stream: _orderService.streamDealers(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Text('Error loading dealers');
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Center(child: CircularProgressIndicator());
+                  }
+
+                  final dealers = snapshot.data ?? [];
+                  if (dealers.isEmpty) {
+                    return Text('No dealers available');
+                  }
+
+                  selectedDealer ??= dealers.first;
+
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        value: selectedDealer,
+                        dropdownColor: backgroundColor,
+                        decoration: InputDecoration(
+                          labelText: 'Select Dealer',
+                          labelStyle: TextStyle(color: primaryColor),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: primaryColor),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: primaryColor, width: 2),
+                          ),
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (String? newValue) {
-                      if (newValue != null) {
-                        setState(() {
-                          selectedDealer = newValue;
-                        });
-                      }
-                    },
-                  ),
-                  SizedBox(height: 15),
-                  TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Quantity',
-                      labelStyle: TextStyle(color: primaryColor),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: primaryColor),
+                        items: dealers.map((String dealer) {
+                          return DropdownMenuItem<String>(
+                            value: dealer,
+                            child: Text(
+                              dealer,
+                              style: TextStyle(color: primaryColor),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              selectedDealer = newValue;
+                            });
+                          }
+                        },
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                        borderSide: BorderSide(color: primaryColor, width: 2),
+                      SizedBox(height: 15),
+                      TextField(
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Quantity',
+                          labelStyle: TextStyle(color: primaryColor),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: primaryColor),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: primaryColor, width: 2),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          quantity = int.tryParse(value) ?? 1;
+                        },
                       ),
-                    ),
-                    onChanged: (value) {
-                      quantity = int.tryParse(value) ?? 1;
-                    },
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
               actions: [
                 TextButton(
@@ -150,18 +141,34 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
                       ),
                     ],
                   ),
-                  onPressed: () {
-                    _sendWhatsAppOrder(
-                      product: Product(
-                        id: 1,
-                        name: 'Sample Product',
-                        stock: 0,
-                        status: "Out of Stock",
-                      ),
-                      dealer: selectedDealer,
-                      quantity: quantity,
-                    );
-                    Navigator.of(context).pop();
+                  onPressed: () async {
+                    if (selectedDealer != null) {
+                      final order = OrderItem(
+                        id:0, // Firestore will generate this
+                        productName: product.name,
+                        dealer: selectedDealer!,
+                        quantity: quantity,
+                        date: DateTime.now(),
+                        status: OrderStatus.pending,
+                      );
+
+                      try {
+                        await _orderService.addOrder(order);
+                        _sendWhatsAppOrder(
+                          product: product,
+                          dealer: selectedDealer!,
+                          quantity: quantity,
+                        );
+                        Navigator.of(context).pop();
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error creating order: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
                   },
                 ),
               ],
@@ -214,17 +221,31 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
             icon: Icon(Icons.add, color: Colors.white),
             onPressed: () {
               _showOrderDialog(Product(
-                id: 1,
+                id: "1",  // Changed to String type
                 name: 'Sample Product',
-                stock: 0,
-                status: "Out of Stock",
+                variations: [],  // Add required variations parameter
+                category: '',
+                lastRestocked: DateTime.now(),  // Changed from null to current date
               ));
             },
           ),
         ],
       ),
-      body:
-      orderHistory.isEmpty ? _buildEmptyState() : _buildOrderHistoryList(),
+      body: StreamBuilder<List<OrderItem>>(
+        stream: _orderService.streamOrders(),
+        builder: (context, orderSnapshot) {
+          if (orderSnapshot.hasError) {
+            return Center(child: Text('Error: ${orderSnapshot.error}'));
+          }
+
+          if (orderSnapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          final orders = orderSnapshot.data ?? [];
+          return orders.isEmpty ? _buildEmptyState() : _buildOrderHistoryList(orders);
+        },
+      ),
     );
   }
 
@@ -260,12 +281,12 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
     );
   }
 
-  Widget _buildOrderHistoryList() {
+  Widget _buildOrderHistoryList(List<OrderItem> orders) {
     return ListView.builder(
       padding: EdgeInsets.all(16),
-      itemCount: orderHistory.length,
+      itemCount: orders.length,
       itemBuilder: (context, index) {
-        return _buildOrderCard(orderHistory[index]);
+        return _buildOrderCard(orders[index]);
       },
     );
   }
@@ -380,16 +401,16 @@ class _OrderManagementPageState extends State<OrderManagementPage> {
   }
 }
 
-// Enum for order status
+// Keep your OrderStatus enum and OrderItem class as they are
+
+
 enum OrderStatus {
   pending,
   inProgress,
   completed,
 }
-
-// Order item class to represent order details
 class OrderItem {
-  final String id;
+  final int id;
   final String productName;
   final String dealer;
   final int quantity;
@@ -404,4 +425,52 @@ class OrderItem {
     required this.date,
     required this.status,
   });
+
+  factory OrderItem.fromFirestore(DocumentSnapshot doc) {
+    try {
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+      // Use the stored orderId field instead of parsing the document ID
+      int orderId = (data['orderId'] as num).toInt();
+
+      return OrderItem(
+        id: orderId,
+        productName: data['productName'] ?? '',
+        dealer: data['dealer'] ?? '',
+        quantity: (data['quantity'] as num?)?.toInt() ?? 0,
+        date: (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        status: _stringToOrderStatus(data['status'] ?? ''),
+      );
+    } catch (e) {
+      print('Error creating OrderItem from Firestore: $e');
+      return OrderItem(
+        id: 0,
+        productName: 'Error Loading Order',
+        dealer: 'Unknown',
+        quantity: 0,
+        date: DateTime.now(),
+        status: OrderStatus.pending,
+      );
+    }
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'productName': productName,
+      'dealer': dealer,
+      'quantity': quantity,
+      'status': status.toString(),
+    };
+  }
+
+  static OrderStatus _stringToOrderStatus(String status) {
+    switch (status) {
+      case 'OrderStatus.completed':
+        return OrderStatus.completed;
+      case 'OrderStatus.inProgress':
+        return OrderStatus.inProgress;
+      default:
+        return OrderStatus.pending;
+    }
+  }
 }
