@@ -16,37 +16,35 @@ class FirestoreService {
   // Stream controller for real-time updates
   Stream<QuerySnapshot>? _productStream;
 
-  // Initialize Firestore settings for better performance
   void initializeFirestore() {
     _firestore.settings = const Settings(
-      persistenceEnabled: true,
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      persistenceEnabled: true, // Enable offline persistence
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED, // Increase cache size
     );
+
+    // Enable network data fetch optimization
+    _firestore.enableNetwork();
   }
 
   // Get products with pagination and real-time updates
+  // Optimized product fetching with pagination and caching
   Stream<List<Product>> getProductsStream({int limit = 20}) {
-    _productStream ??= _firestore
+    return _firestore
         .collection(_productsCollection)
         .orderBy('timestamp', descending: true)
         .limit(limit)
-        .snapshots();
-
-    return _productStream!.map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final product = Product.fromFirestore(doc);
-        _cache[doc.id] = product; // Update cache
-        return product;
-      }).toList();
-    });
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => Product.fromFirestore(doc))
+        .toList());
   }
 
-  // Get products with pagination for initial load
   Future<List<Product>> getProducts({
     int limit = 20,
     DocumentSnapshot? lastDocument,
   }) async {
     try {
+      // Use only server source for latest data (avoid hybrid unless needed)
       Query query = _firestore
           .collection(_productsCollection)
           .orderBy('timestamp', descending: true)
@@ -56,24 +54,31 @@ class FirestoreService {
         query = query.startAfterDocument(lastDocument);
       }
 
-      final QuerySnapshot snapshot = await query.get(
-        const GetOptions(source: Source.serverAndCache),
+      final snapshot = await query.get(
+        const GetOptions(source: Source.server),
       );
 
-      return snapshot.docs.map((doc) {
+      final products = <Product>[];
+      for (final doc in snapshot.docs) {
         final product = Product.fromFirestore(doc);
-        _cache[doc.id] = product; // Update cache
-        return product;
-      }).toList();
-    } catch (e) {
-      print('Error getting products: $e');
-      // Return cached data if available when offline
-      if (_cache.isNotEmpty) {
-        return _cache.values.toList();
+        _cache[doc.id] = product;
+        products.add(product);
       }
-      throw e;
+
+      return products;
+    } catch (e) {
+      print('Error fetching products: $e');
+
+      // // Offline fallback: return cached list
+      // if (_cache.isNotEmpty) {
+      //   return _cache.values.toList()
+      //     ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      // }
+
+      rethrow;
     }
   }
+
 
   // Add a new product with optimized write
   Future<String> addProduct(Product product) async {
@@ -101,28 +106,29 @@ class FirestoreService {
     }
   }
 
-  // Get a single product with cache
   Future<Product?> getProduct(String productId) async {
-    // Return from cache if available
-    if (_cache.containsKey(productId)) {
-      return _cache[productId];
-    }
-
     try {
       final DocumentSnapshot doc = await _firestore
           .collection(_productsCollection)
           .doc(productId)
-          .get(const GetOptions(source: Source.serverAndCache));
+          .get(const GetOptions(
+        source: Source.cache, // Try cache first
+        serverTimestampBehavior: ServerTimestampBehavior.estimate,
+      ));
 
       if (doc.exists) {
-        final product = Product.fromFirestore(doc);
-        _cache[productId] = product; // Update cache
-        return product;
+        return Product.fromFirestore(doc);
       }
-      return null;
+
+      // If not in cache, fetch from server
+      return await _firestore
+          .collection(_productsCollection)
+          .doc(productId)
+          .get(const GetOptions(source: Source.server))
+          .then((doc) => doc.exists ? Product.fromFirestore(doc) : null);
     } catch (e) {
       print('Error getting product: $e');
-      throw e;
+      rethrow;
     }
   }
 
