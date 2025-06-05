@@ -4,26 +4,35 @@ import 'package:mobistore/Screen/inventory.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
+
   factory FirestoreService() => _instance;
+
   FirestoreService._internal();
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String _productsCollection = 'products';
 
-  // Local cache
+  /// Enhanced cache with timestamp
   final Map<String, Product> _cache = {};
+  DateTime? _lastCacheUpdate;
+  static const cacheDuration = Duration(minutes: 5);
 
   // Stream controller for real-time updates
   Stream<QuerySnapshot>? _productStream;
 
   void initializeFirestore() {
     _firestore.settings = const Settings(
-      persistenceEnabled: true, // Enable offline persistence
-      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED, // Increase cache size
+      persistenceEnabled: true,
+      cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      sslEnabled: true,
+      host: 'firestore.googleapis.com',
+      ignoreUndefinedProperties: true,
     );
 
-    // Enable network data fetch optimization
-    _firestore.enableNetwork();
+    // Enable offline persistence
+    _firestore.enablePersistence(const PersistenceSettings(
+      synchronizeTabs: true,
+    ));
   }
 
   // Get products with pagination and real-time updates
@@ -34,17 +43,27 @@ class FirestoreService {
         .orderBy('timestamp', descending: true)
         .limit(limit)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => Product.fromFirestore(doc))
-        .toList());
+        .map((snapshot) =>
+        snapshot.docs
+            .map((doc) => Product.fromFirestore(doc))
+            .toList());
   }
 
+
+  // Get products with pagination for initial load
   Future<List<Product>> getProducts({
     int limit = 20,
     DocumentSnapshot? lastDocument,
   }) async {
     try {
-      // Use only server source for latest data (avoid hybrid unless needed)
+      // Check if cache is valid
+      if (_isCacheValid()) {
+        print('Returning cached products');
+        return _cache.values.toList()
+          ..sort((a, b) => b.lastRestocked.compareTo(a.lastRestocked));
+      }
+
+      // Create an optimized query
       Query query = _firestore
           .collection(_productsCollection)
           .orderBy('timestamp', descending: true)
@@ -54,28 +73,47 @@ class FirestoreService {
         query = query.startAfterDocument(lastDocument);
       }
 
+      // Use server source for fresh data, but enable persistence for offline access
       final snapshot = await query.get(
-        const GetOptions(source: Source.server),
+        GetOptions(source: Source.serverAndCache),
       );
 
       final products = <Product>[];
       for (final doc in snapshot.docs) {
         final product = Product.fromFirestore(doc);
+        // Update cache
         _cache[doc.id] = product;
         products.add(product);
       }
 
+      _lastCacheUpdate = DateTime.now();
       return products;
     } catch (e) {
       print('Error fetching products: $e');
 
-      // // Offline fallback: return cached list
-      // if (_cache.isNotEmpty) {
-      //   return _cache.values.toList()
-      //     ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-      // }
+      // Fallback to cache if available
+      if (_cache.isNotEmpty) {
+        print('Returning cached products due to error');
+        return _cache.values.toList()
+          ..sort((a, b) => b.lastRestocked.compareTo(a.lastRestocked));
+      }
 
       rethrow;
+    }
+  }
+
+
+  bool _isCacheValid() {
+    if (_cache.isEmpty || _lastCacheUpdate == null) return false;
+    return DateTime.now().difference(_lastCacheUpdate!) < cacheDuration;
+  }
+
+  Future<void> clearCache({bool forceRefresh = false}) async {
+    _cache.clear();
+    _lastCacheUpdate = null;
+
+    if (forceRefresh) {
+      await getProducts();
     }
   }
 
@@ -188,11 +226,5 @@ class FirestoreService {
       print('Error deleting product: $e');
       throw e;
     }
-  }
-
-  // Clear cache
-  void clearCache() {
-    _cache.clear();
-    _productStream = null;
   }
 }

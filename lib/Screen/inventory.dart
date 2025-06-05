@@ -104,7 +104,7 @@ class _ProductPageState extends State<ProductPage> {
     try {
       setState(() => isLoading = true);
       await _firestoreService.updateProduct(product.id!, product);
-      await _loadProducts();
+      await _loadProducts(); // Reload products to ensure UI is in sync
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Product updated successfully')),
       );
@@ -305,24 +305,31 @@ class _ProductPageState extends State<ProductPage> {
             ),
             ElevatedButton(
               child: Text('Update'),
-              onPressed: () {
+              onPressed: () async {
                 final newStock = int.tryParse(stockController.text);
                 if (newStock != null && newStock >= 0) {
-                  setState(() {
-                    variation.updateStock(newStock);
-                    product.lastRestocked = DateTime.now();
-                  });
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Stock updated successfully')),
-                  );
+                  try {
+                    setState(() {
+                      variation.updateStock(newStock);
+                      product.lastRestocked = DateTime.now();
+                    });
+
+                    await _updateProduct(product); // Save to Firestore
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Stock updated successfully')),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error updating stock: $e')),
+                    );
+                  }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text('Please enter a valid stock quantity')),
+                    SnackBar(content: Text('Please enter a valid stock quantity')),
                   );
                 }
-              },
+              }
             ),
           ],
         );
@@ -383,7 +390,7 @@ class _ProductPageState extends State<ProductPage> {
             ),
             ElevatedButton(
               child: Text('Add Variation'),
-              onPressed: () {
+              onPressed: () async {
                 // Validate inputs
                 if (sizeController.text.isEmpty ||
                     stockController.text.isEmpty ||
@@ -405,22 +412,30 @@ class _ProductPageState extends State<ProductPage> {
                   initialStatus = ProductStatus.inStock;
                 }
 
-                // Add new variation
-                setState(() {
-                  product.variations.add(ProductVariation(
-                    size: sizeController.text,
-                    stock: newStock,
-                    price: newPrice,
-                    status: initialStatus,
-                  ));
-                  product.lastRestocked = DateTime.now();
-                });
+                try {
+                  // Add new variation
+                  setState(() {
+                    product.variations.add(ProductVariation(
+                      size: sizeController.text,
+                      stock: newStock,
+                      price: newPrice,
+                      status: initialStatus,
+                    ));
+                    product.lastRestocked = DateTime.now();
+                  });
 
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Variation added successfully')),
-                );
-              },
+                  await _updateProduct(product); // Save to Firestore
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Variation added successfully')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error adding variation: $e')),
+                  );
+                }
+              }
+
             ),
           ],
         );
@@ -719,6 +734,7 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Delete Variation Dialog
+  // Update _deleteVariation method
   void _deleteVariation(Product product, ProductVariation variation) {
     showDialog(
       context: context,
@@ -735,14 +751,21 @@ class _ProductPageState extends State<ProductPage> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: Text('Delete'),
-              onPressed: () {
-                setState(() {
-                  product.variations.remove(variation);
-                });
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Variation deleted successfully')),
-                );
+              onPressed: () async {
+                try {
+                  setState(() {
+                    product.variations.remove(variation);
+                  });
+                  await _updateProduct(product); // Save to Firestore
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Variation deleted successfully')),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting variation: $e')),
+                  );
+                }
               },
             ),
           ],
@@ -753,13 +776,19 @@ class _ProductPageState extends State<ProductPage> {
 
   // Delete Product Method
   void _deleteProduct(Product product) {
+    if (product.id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: Product ID is missing')),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: Text('Delete Product'),
-          content: Text(
-              'Are you sure you want to delete ${product.name} with all its variations?'),
+          content: Text('Are you sure you want to delete ${product.name} with all its variations?'),
           actions: [
             TextButton(
               child: Text('Cancel'),
@@ -768,14 +797,27 @@ class _ProductPageState extends State<ProductPage> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: Text('Delete'),
-              onPressed: () {
-                setState(() {
-                  products.remove(product);
-                });
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Product deleted successfully')),
-                );
+              onPressed: () async {
+                try {
+                  setState(() => isLoading = true);
+                  await _firestoreService.deleteProduct(product.id!);
+
+                  setState(() {
+                    products.remove(product);
+                    isLoading = false;
+                  });
+
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Product deleted successfully')),
+                  );
+                } catch (e) {
+                  setState(() => isLoading = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error deleting product: $e')),
+                  );
+                  Navigator.of(context).pop();
+                }
               },
             ),
           ],
