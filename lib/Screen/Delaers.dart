@@ -1,9 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-// Import the Dealer class and getDealers function from utility
 import '../firebase_services/dealer_firebase_service.dart';
 import '../utility/dealer.dart' as DealerUtil;
+
 class Dealer {
   String? id;
   final String name;
@@ -60,9 +59,6 @@ class _DealersPageState extends State<DealersPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
-
   // Method to show add dealer bottom sheet
   void _showAddDealerBottomSheet() {
     showModalBottomSheet(
@@ -93,21 +89,11 @@ class _DealersPageState extends State<DealersPage> {
             const SizedBox(height: 20),
             _buildTextField(_nameController, 'Dealer Name', Icons.store),
             const SizedBox(height: 10),
-            _buildTextField(
-                _locationController, 'Location', Icons.location_city),
-            const SizedBox(height: 10),
             _buildTextField(_contactController, 'Contact Number', Icons.phone,
                 TextInputType.phone),
             const SizedBox(height: 10),
-            _buildTextField(_emailController, 'Email Address', Icons.email,
-                TextInputType.emailAddress),
-            const SizedBox(height: 10),
             _buildTextField(
-              _addressController,
-              'Address',
-              Icons.location_on,
-              TextInputType.multiline,
-            ),
+                _locationController, 'Location', Icons.location_city),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _addDealer,
@@ -176,12 +162,10 @@ class _DealersPageState extends State<DealersPage> {
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      // Clear controllers and close bottom sheet
+      // Clear only used controllers
       _nameController.clear();
       _contactController.clear();
       _locationController.clear();
-      _emailController.clear();
-      _addressController.clear();
       Navigator.of(context).pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -394,8 +378,6 @@ class _DealersPageState extends State<DealersPage> {
     _nameController.dispose();
     _contactController.dispose();
     _locationController.dispose();
-    _emailController.dispose();
-    _addressController.dispose();
     super.dispose();
   }
 }

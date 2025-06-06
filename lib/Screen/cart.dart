@@ -1,8 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-
 import '../Resuable_widget/Products.dart';
 import '../utility/dealer.dart';
 import 'inventory.dart';
@@ -15,14 +16,21 @@ import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:mobistore/Resuable_widget/Products.dart';
+import 'package:mobistore/firebase_services/firebase_service.dart';
+import 'package:mobistore/firebase_services/cart_services.dart';
+
+
 
 class CartItem {
+  final String? id;
   final Product product;
   final ProductVariation variation;
   int quantity;
   bool isSelected;
 
   CartItem({
+    this.id,
     required this.product,
     required this.variation,
     this.quantity = 1,
@@ -30,6 +38,30 @@ class CartItem {
   });
 
   double get totalPrice => variation.price * quantity;
+
+  // Create CartItem from Firestore document
+  factory CartItem.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return CartItem(
+      id: doc.id,
+      product: Product.fromFirestore(data['product'] as Map<String, dynamic>),
+      variation: ProductVariation.fromFirestore(data['variation'] as Map<String, dynamic>),
+      quantity: data['quantity'] ?? 1,
+      isSelected: data['isSelected'] ?? true,
+    );
+  }
+
+  // Convert CartItem to Firestore data
+  // Modify the toFirestore method in CartItem class
+  Map<String, dynamic> toFirestore() {
+    return {
+      'productId': product.id,
+      'product': product.toFirestore(),
+      'variation': variation.toFirestore(),
+      'quantity': quantity,
+      'isSelected': isSelected,
+    };
+  }
 }
 
 class CartPage extends StatefulWidget {
@@ -49,9 +81,12 @@ class _CartPageState extends State<CartPage> {
   // Dealers list
   List<Dealer> dealersList = [];
   Dealer? selectedDealer;
-
+  bool _loadingDealers = false;
   // Store ScaffoldMessengerState reference for safe access
   late ScaffoldMessengerState _scaffoldMessenger;
+
+  late final CartService _cartService;
+  late Stream<List<CartItem>> _cartStream;
 
   @override
   void didChangeDependencies() {
@@ -63,18 +98,24 @@ class _CartPageState extends State<CartPage> {
   @override
   void initState() {
     super.initState();
-    // Initialize dealers list
-    dealersList = getDealers();
+    // Initialize cart service with current user ID
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _cartService = CartService(userId: user.uid);
+      _cartStream = _cartService.streamCartItems();
+      _loadDealers();
+    }
   }
 
   // Toggle selection of all items
-  void _toggleSelectAll(bool? value) {
-    setState(() {
-      for (var item in CartManager.instance.items) {
-        item.isSelected = value ?? false;
+  Future<void> _toggleSelectAll(bool? value, List<CartItem> items) async {
+    if (value != null) {
+      for (var item in items) {
+        await _cartService.updateItem(item.id!, {'isSelected': value});
       }
-    });
+    }
   }
+
 
   // Modified _calculateTotalSelectedPrice() method with debugging
   double _calculateTotalSelectedPrice() {
@@ -95,38 +136,44 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Remove an item from cart
-  void _removeFromCart(CartItem item) {
-    setState(() {
-      CartManager.instance.removeItem(item);
-    });
-
-    _scaffoldMessenger.showSnackBar(
-      SnackBar(content: Text('Removed from cart')),
+  Future<void> _removeFromCart(CartItem item) async {
+    await _cartService.removeItem(item.id!);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Item removed from cart')),
     );
   }
 
-  // Increase quantity of an item
-  void _increaseQuantity(CartItem item) {
-    setState(() {
-      item.quantity++;
-    });
-  }
-
-  // Decrease quantity of an item
-  void _decreaseQuantity(CartItem item) {
-    if (item.quantity > 1) {
-      setState(() {
-        item.quantity--;
-      });
+  // Update quantity directly
+  // Optimized cart operations
+  Future<void> _updateQuantity(CartItem item, String value) async {
+    final newQuantity = int.tryParse(value);
+    if (newQuantity != null && newQuantity > 0) {
+      await _cartService.updateQuantity(item.id!, newQuantity);
     }
   }
 
-  // Update quantity directly
-  void _updateQuantity(CartItem item, String value) {
-    final newQuantity = int.tryParse(value);
-    if (newQuantity != null && newQuantity > 0) {
+  // Add this method
+  Future<void> _loadDealers() async {
+    setState(() {
+      _loadingDealers = true;
+    });
+
+    try {
+      final dealers = await FirebaseFirestore.instance
+          .collection('dealers')
+          .get()
+          .then((snapshot) => snapshot.docs
+          .map((doc) => Dealer.fromFirestore(doc))
+          .toList());
+
       setState(() {
-        item.quantity = newQuantity;
+        dealersList = dealers;
+        _loadingDealers = false;
+      });
+    } catch (e) {
+      print('Error loading dealers: $e');
+      setState(() {
+        _loadingDealers = false;
       });
     }
   }
@@ -222,65 +269,277 @@ class _CartPageState extends State<CartPage> {
     await Share.shareXFiles([XFile(file.path)], text: 'Your Order Receipt');
   }
 
+
+  // Add this method to _CartPageState class
+  Future<pw.Document> _generateOrderPdf(List<CartItem> items) async {
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Order Receipt',
+                  style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 20),
+              // Add dealer information
+              pw.Text('Dealer: ${selectedDealer?.name ?? "N/A"}',
+                  style: pw.TextStyle(fontSize: 14)),
+              pw.Text('Location: ${selectedDealer?.location ?? "N/A"}',
+                  style: pw.TextStyle(fontSize: 14)),
+              pw.Text('Date: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+                  style: pw.TextStyle(fontSize: 14)),
+              pw.SizedBox(height: 20),
+              pw.Text('Order Summary:',
+                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 10),
+              pw.Table(
+                border: pw.TableBorder.all(),
+                children: [
+                  pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('Item',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('Size',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('Qty',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('Price',
+                            style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  ...items.map((item) => pw.TableRow(
+                    children: [
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text(item.product.name),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text(item.variation.size),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('${item.quantity}'),
+                      ),
+                      pw.Padding(
+                        padding: pw.EdgeInsets.all(5),
+                        child: pw.Text('₹${item.totalPrice.toStringAsFixed(2)}'),
+                      ),
+                    ],
+                  )),
+                ],
+              ),
+              pw.SizedBox(height: 20),
+              pw.Text(
+                'Total: Rs .${items.fold(0.0, (sum, item) => sum + item.totalPrice).toStringAsFixed(2)}',
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return pdf;
+  }
+
+// Add this method to _CartPageState class
+  Future<void> _createOrder(List<CartItem> items) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final orderData = {
+      'userId': user.uid,
+      'dealerId': selectedDealer!.id,
+      'dealerName': selectedDealer!.name,
+      'dealerLocation': selectedDealer!.location,
+      'items': items.map((item) => {
+        'productId': item.product.id,
+        'product': item.product.toFirestore(),
+        'variation': item.variation.toFirestore(),
+        'quantity': item.quantity,
+        'price': item.variation.price,
+        'totalPrice': item.totalPrice,
+      }).toList(),
+      'totalAmount': items.fold(0.0, (sum, item) => sum + item.totalPrice),
+      'orderDate': FieldValue.serverTimestamp(),
+      'status': 'pending',
+      'createdAt': DateTime.now().toIso8601String(), // Add this as a backup timestamp
+    };
+
+    try {
+      await FirebaseFirestore.instance.collection('orders').add(orderData);
+    } catch (e) {
+      print('Error creating order: $e');
+      throw Exception('Failed to create order: $e');
+    }
+  }
+
+
+  Future<String> _cacheOrderPdf(List<CartItem> items) async {
+    final pdf = await _generateOrderPdf(items);
+    final output = await getTemporaryDirectory();
+    final file = File('${output.path}/order_${DateTime.now().millisecondsSinceEpoch}.pdf');
+    await file.writeAsBytes(await pdf.save());
+    return file.path;
+  }
+
   // Place order for selected items
-  void _placeOrder() {
-    if (_countSelectedItems() == 0) {
-      _scaffoldMessenger.showSnackBar(
+  // Update the _placeOrder method signature and implementation
+  Future<void> _placeOrder() async {
+    if (selectedDealer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Please select a dealer first')),
+      );
+      _showDealerSelectionDialog();
+      return;
+    }
+
+    final items = await _cartService.getCartItems();
+    final selectedItems = items.where((item) => item.isSelected).toList();
+
+    if (selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please select items to place order')),
       );
       return;
     }
 
-    if (selectedDealer == null) {
-      _showDealerSelectionDialog();
-      return;
-    }
-
-    final selectedItems =
-    CartManager.instance.items.where((item) => item.isSelected).toList();
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: Text('Confirm Order'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Dealer: ${selectedDealer!.name}'),
-            SizedBox(height: 8),
-            Text(
-              'Total: ₹${_calculateTotalSelectedPrice().toStringAsFixed(2)}',
-              style: TextStyle(fontWeight: FontWeight.bold),
+    try {
+      // Show confirmation dialog
+      bool? confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text('Confirm Order'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Dealer: ${selectedDealer!.name}'),
+                SizedBox(height: 8),
+                Text(
+                  'Total: ₹${selectedItems.fold(0.0, (sum, item) => sum + item.totalPrice).toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 16),
+                Text('Order Summary:'),
+                SizedBox(height: 8),
+                ...selectedItems.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4.0),
+                  child: Text(
+                    '• ${item.product.name} (${item.variation.size}) x ${item.quantity}',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                )),
+              ],
             ),
-            SizedBox(height: 16),
-            Text('Order Summary:'),
-            SizedBox(height: 8),
-            ...selectedItems.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 4.0),
-              child: Text(
-                '• ${item.product.name} (${item.variation.size}) x ${item.quantity}',
-                style: TextStyle(fontSize: 14),
-              ),
-            )),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(false),
+            ),
+            TextButton(
+              child: Text('Confirm'),
+              onPressed: () => Navigator.of(context).pop(true),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.of(dialogContext).pop(),
+      );
+
+      if (confirmed != true) return;
+
+      // Show loading dialog
+      BuildContext? dialogContext;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          dialogContext = context;
+          return Center(
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Processing order...'),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+
+      try {
+        // Generate and cache PDF first
+        final pdfPath = await _cacheOrderPdf(selectedItems);
+
+        // Create order in Firestore
+        await _createOrder(selectedItems);
+
+        // Remove items from cart
+        for (var item in selectedItems) {
+          await _cartService.removeItem(item.id!);
+        }
+
+        // Close loading dialog
+        if (dialogContext != null && mounted) {
+          Navigator.of(dialogContext!).pop();
+        }
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Order placed successfully')),
+        );
+
+        // Share PDF
+        await Share.shareXFiles(
+          [XFile(pdfPath)],
+          text: 'Order Receipt',
+          subject: 'Order Receipt ${DateFormat('yyyy-MM-dd').format(DateTime.now())}',
+        );
+
+      } catch (e) {
+        // Close loading dialog on error
+        if (dialogContext != null && mounted) {
+          Navigator.of(dialogContext!).pop();
+        }
+
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error placing order: $e'),
+            backgroundColor: Colors.red,
           ),
-          TextButton(
-            child: Text('Place Order'),
-            onPressed: () {
-              // Use dialogContext to pop the dialog
-              Navigator.of(dialogContext).pop();
-              _processPurchaseOrder();
-            },
-          ),
-        ],
-      ),
-    );
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   // Separate method to process purchase after dialog closes
@@ -309,34 +568,48 @@ class _CartPageState extends State<CartPage> {
 
   // Show dealer selection dialog
   void _showDealerSelectionDialog() {
+    if (dealersList.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No dealers available. Please try again later.')),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('Select Dealer'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ...dealersList.map((dealer) => RadioListTile<Dealer>(
-              title: Text(dealer.name),
-              subtitle: Text(dealer.location),
-              value: dealer,
-              groupValue: selectedDealer,
-              onChanged: (Dealer? value) {
-                // Use dialogContext to pop the dialog
-                Navigator.of(dialogContext).pop();
-
-                // Update state if still mounted
-                if (mounted) {
-                  setState(() {
-                    selectedDealer = value;
-                  });
-
-                  // Place order after selection if mounted
-                  _placeOrder();
-                }
-              },
-            )),
-          ],
+        content: Container(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_loadingDealers)
+                Center(child: CircularProgressIndicator())
+              else if (dealersList.isEmpty)
+                Text('No dealers available')
+              else
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: dealersList.map((dealer) => RadioListTile<Dealer>(
+                        title: Text(dealer.name),
+                        subtitle: Text(dealer.location),
+                        value: dealer,
+                        groupValue: selectedDealer,
+                        onChanged: (Dealer? value) {
+                          setState(() {
+                            selectedDealer = value;
+                          });
+                          Navigator.of(dialogContext).pop();
+                          _placeOrder();
+                        },
+                      )).toList(),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -359,34 +632,59 @@ class _CartPageState extends State<CartPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(
-          'My Cart',
-          style: TextStyle(color: Colors.white),
-        ),
-        backgroundColor: primaryColor,
-        actions: [
-          if (CartManager.instance.items.isNotEmpty)
-            Row(
-              children: [
-                Checkbox(
-                  value: _areAllItemsSelected(),
-                  onChanged: _toggleSelectAll,
-                  activeColor: accentColor,
-                ),
-                Text(
-                  'Select All',
-                  style: TextStyle(color: Colors.white),
-                ),
-                SizedBox(width: 16),
-              ],
-            ),
-        ],
+      title: Text(
+      'My Cart',
+      style: TextStyle(color: Colors.white),
+    ),
+    backgroundColor: primaryColor,
+    actions: [
+    StreamBuilder<List<CartItem>>(
+    stream: _cartStream,
+    builder: (context, snapshot) {
+    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+    return SizedBox.shrink();
+    }
+    final items = snapshot.data!;
+    final allSelected = items.every((item) => item.isSelected);
+    return Row(
+    children: [
+    Checkbox(
+    value: allSelected,
+    onChanged: (value) => _toggleSelectAll(value, items),
+    activeColor: accentColor,
+    ),
+    Text(
+    'Select All',
+    style: TextStyle(color: Colors.white),
+    ),
+    SizedBox(width: 16),
+    ],
+    );
+    },
+    ),
+    ],
+    ),
+      body: StreamBuilder<List<CartItem>>(
+        stream: _cartStream,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final items = snapshot.data ?? [];
+
+          if (items.isEmpty) {
+            return _buildEmptyCart();
+          }
+
+          return _buildCartList(items);
+        },
       ),
-      body: CartManager.instance.items.isEmpty
-          ? _buildEmptyCart()
-          : _buildCartList(),
-      bottomNavigationBar:
-      CartManager.instance.items.isEmpty ? null : _buildCheckoutBar(),
+      bottomNavigationBar: _buildCheckoutBar(),
     );
   }
 
@@ -413,7 +711,11 @@ class _CartPageState extends State<CartPage> {
               style: TextStyle(color: Colors.white),
             ),
             onPressed: () {
-              Navigator.of(context).pop();
+              // Replace Navigator.pop with Navigator.push to go to the Products page
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ProductPage()),
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
@@ -426,13 +728,74 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
+  void _showQuantityDialog(CartItem item) {
+    final TextEditingController controller = TextEditingController(text: item.quantity.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Update Quantity'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Enter quantity for ${item.product.name}'),
+            SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Quantity',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(5), // Limit to 5 digits
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          TextButton(
+            child: Text('Update'),
+            onPressed: () async {
+              final newQuantity = int.tryParse(controller.text);
+              if (newQuantity != null && newQuantity > 0) {
+                await _cartService.updateQuantity(item.id!, newQuantity);
+                Navigator.of(context).pop();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please enter a valid quantity')),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _updateItemSelection(CartItem item, bool? value) async {
+    if (value != null) {
+      try {
+        await _cartService.updateItem(item.id!, {'isSelected': value});
+      } catch (e) {
+        print('Error updating item selection: $e');
+      }
+    }
+  }
   // Cart list UI
-  Widget _buildCartList() {
+  Widget _buildCartList(List<CartItem> items) {
     return ListView.builder(
       padding: EdgeInsets.all(16),
-      itemCount: CartManager.instance.items.length,
+      itemCount: items.length,
       itemBuilder: (context, index) {
-        final item = CartManager.instance.items[index];
+        final item = items[index];
         return Card(
           margin: EdgeInsets.only(bottom: 16),
           shape: RoundedRectangleBorder(
@@ -446,11 +809,7 @@ class _CartPageState extends State<CartPage> {
                 // Checkbox for selection
                 Checkbox(
                   value: item.isSelected,
-                  onChanged: (bool? value) {
-                    setState(() {
-                      item.isSelected = value ?? false;
-                    });
-                  },
+                  onChanged: (bool? value) => _updateItemSelection(item, value),
                   activeColor: primaryColor,
                 ),
                 // Product Image
@@ -505,46 +864,28 @@ class _CartPageState extends State<CartPage> {
                       Row(
                         children: [
                           // Quantity adjustment
-                          Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Row(
-                              children: [
-                                InkWell(
-                                  onTap: () => _decreaseQuantity(item),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    child: Icon(Icons.remove, size: 16),
-                                  ),
-                                ),
-                                Container(
-                                  width: 40,
-                                  padding: EdgeInsets.symmetric(horizontal: 4),
-                                  child: TextField(
-                                    textAlign: TextAlign.center,
-                                    keyboardType: TextInputType.number,
-                                    controller: TextEditingController(
-                                        text: item.quantity.toString()),
-                                    decoration: InputDecoration(
-                                      border: InputBorder.none,
-                                      contentPadding: EdgeInsets.zero,
+                          GestureDetector(
+                            onTap: () => _showQuantityDialog(item),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit, size: 16, color: Colors.grey[600]),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    '${item.quantity}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
                                     ),
-                                    onChanged: (value) =>
-                                        _updateQuantity(item, value),
                                   ),
-                                ),
-                                InkWell(
-                                  onTap: () => _increaseQuantity(item),
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    child: Icon(Icons.add, size: 16),
-                                  ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                           Spacer(),
@@ -566,62 +907,76 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  // Checkout bar UI
   Widget _buildCheckoutBar() {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: Offset(0, -5),
+    return StreamBuilder<List<CartItem>>(
+      stream: _cartStream,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return SizedBox.shrink();
+        }
+
+        final items = snapshot.data!;
+        final selectedItems = items.where((item) => item.isSelected).toList();
+        final totalPrice = selectedItems.fold(
+          0.0,
+              (sum, item) => sum + item.totalPrice,
+        );
+
+        return Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: Offset(0, -5),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: SafeArea(
+            child: Row(
               children: [
-                Text(
-                  'Total (${_countSelectedItems()} items):',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total (${selectedItems.length} items):',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Text(
+                      '₹ ${totalPrice.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: primaryColor,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '₹ ${_calculateTotalSelectedPrice().toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
+                Spacer(),
+                ElevatedButton(
+                  onPressed: selectedItems.isNotEmpty ? _placeOrder : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: Text(
+                    'Place Order',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
               ],
             ),
-            Spacer(),
-            ElevatedButton(
-              onPressed: _placeOrder,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text(
-                'Place Order',
-                style: TextStyle(fontSize: 16, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
-
   @override
   void dispose() {
     // No context-dependent operations here

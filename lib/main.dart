@@ -10,9 +10,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
 
-  final firestoreService = FirestoreService();
-  firestoreService.initializeFirestore();
-
   runApp(const MobiStore());
 }
 

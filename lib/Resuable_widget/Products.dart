@@ -19,10 +19,8 @@ class ProductVariation {
     required this.status,
   });
 
-  // Add updateStock method
   void updateStock(int newStock) {
     stock = newStock;
-    // Update status based on new stock level
     if (newStock <= 0) {
       status = ProductStatus.outOfStock;
     } else if (newStock <= 5) {
@@ -32,21 +30,21 @@ class ProductVariation {
     }
   }
 
-  // Add fromMap constructor for Firestore
-  factory ProductVariation.fromMap(Map<String, dynamic> map) {
+  // Update the method name to fromFirestore and handle the data conversion
+  factory ProductVariation.fromFirestore(Map<String, dynamic> data) {
     return ProductVariation(
-      size: map['size'] ?? '',
-      stock: map['stock'] ?? 0,
-      price: (map['price'] ?? 0.0).toDouble(),
+      size: data['size'] ?? '',
+      stock: data['stock'] ?? 0,
+      price: (data['price'] ?? 0.0).toDouble(),
       status: ProductStatus.values.firstWhere(
-            (e) => e.toString() == map['status'],
+            (e) => e.toString() == data['status'],
         orElse: () => ProductStatus.outOfStock,
       ),
     );
   }
 
-  // Add toMap method for Firestore
-  Map<String, dynamic> toMap() {
+  // Update the method name to toFirestore
+  Map<String, dynamic> toFirestore() {
     return {
       'size': size,
       'stock': stock,
@@ -54,10 +52,16 @@ class ProductVariation {
       'status': status.toString(),
     };
   }
+
+  // Keep the old methods for backwards compatibility
+  factory ProductVariation.fromMap(Map<String, dynamic> map) =>
+      ProductVariation.fromFirestore(map);
+
+  Map<String, dynamic> toMap() => toFirestore();
 }
 
 class Product {
-  String? id; // Change from int to String? for Firestore document ID
+  String? id;
   String name;
   String? imagePath;
   String category;
@@ -73,7 +77,6 @@ class Product {
     required this.variations,
   });
 
-  // Add getOverallStatus method
   ProductStatus getOverallStatus() {
     if (variations.isEmpty || variations.every((v) => v.status == ProductStatus.outOfStock)) {
       return ProductStatus.outOfStock;
@@ -84,34 +87,51 @@ class Product {
     }
   }
 
-  // Add getTotalStock method
   int getTotalStock() {
     return variations.fold(0, (sum, variation) => sum + variation.stock);
   }
 
-  // Add fromFirestore constructor
-  factory Product.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+  // Update to handle both DocumentSnapshot and Map
+  factory Product.fromFirestore(dynamic source) {
+    Map<String, dynamic> data;
+    String? documentId;
+
+    if (source is DocumentSnapshot) {
+      data = source.data() as Map<String, dynamic>;
+      documentId = source.id;
+    } else if (source is Map<String, dynamic>) {
+      data = source;
+      documentId = data['id'] as String?;
+    } else {
+      throw ArgumentError('Invalid source type for Product.fromFirestore');
+    }
+
     return Product(
-      id: doc.id,
+      id: documentId,
       name: data['name'] ?? '',
       imagePath: data['imagePath'],
       category: data['category'] ?? '',
-      lastRestocked: (data['lastRestocked'] as Timestamp).toDate(),
+      lastRestocked: (data['lastRestocked'] as Timestamp?)?.toDate() ?? DateTime.now(),
       variations: (data['variations'] as List<dynamic>?)
-          ?.map((v) => ProductVariation.fromMap(v as Map<String, dynamic>))
+          ?.map((v) => ProductVariation.fromFirestore(v as Map<String, dynamic>))
           .toList() ?? [],
     );
   }
 
-  // Add toMap method for Firestore
-  Map<String, dynamic> toMap() {
+  // Update method name to toFirestore and keep the same implementation
+  Map<String, dynamic> toFirestore() {
     return {
       'name': name,
       'imagePath': imagePath,
       'category': category,
       'lastRestocked': Timestamp.fromDate(lastRestocked),
-      'variations': variations.map((v) => v.toMap()).toList(),
+      'variations': variations.map((v) => v.toFirestore()).toList(),
     };
   }
+
+  // Keep the old methods for backwards compatibility
+  factory Product.fromMap(Map<String, dynamic> map) =>
+      Product.fromFirestore(map);
+
+  Map<String, dynamic> toMap() => toFirestore();
 }

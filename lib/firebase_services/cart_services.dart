@@ -1,0 +1,144 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:mobistore/Screen/cart.dart';
+import 'package:mobistore/firebase_services/firebase_service.dart';
+
+import '../Screen/Delaers.dart';
+
+class CartService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final String userId;
+
+  CartService({required this.userId});
+
+  // Collection reference
+  CollectionReference get _cartRef =>
+      _firestore.collection('users').doc(userId).collection('cart');
+
+  // Stream cart items
+  Stream<List<CartItem>> streamCartItems() {
+    return _cartRef
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => CartItem.fromFirestore(doc))
+        .toList());
+  }
+
+  // Add item to cart
+  Future<void> addItem(CartItem item) async {
+    final existingItem = await _cartRef
+        .where('productId', isEqualTo: item.product.id)
+        .where('variationSize', isEqualTo: item.variation.size)
+        .get();
+
+    if (existingItem.docs.isNotEmpty) {
+      // Update quantity
+      final doc = existingItem.docs.first;
+      final currentQuantity = doc.get('quantity') as int;
+      await doc.reference.update({'quantity': currentQuantity + 1});
+    } else {
+      // Add new item
+      await _cartRef.add(item.toFirestore());
+    }
+  }
+
+  // Update item quantity
+  Future<void> updateQuantity(String itemId, int quantity) async {
+    await _cartRef.doc(itemId).update({'quantity': quantity});
+  }
+
+  // Remove item
+  Future<void> removeItem(String itemId) async {
+    await _cartRef.doc(itemId).delete();
+  }
+
+  // Clear cart
+  Future<void> clearCart() async {
+    final batch = _firestore.batch();
+    final snapshots = await _cartRef.get();
+
+    for (var doc in snapshots.docs) {
+      batch.delete(doc.reference);
+    }
+
+    await batch.commit();
+  }
+
+  // Get cart total - Fixed implementation
+  Future<double> getCartTotal() async {
+    try {
+      final snapshot = await _cartRef.get();
+      double total = 0.0;
+
+      for (var doc in snapshot.docs) {
+        final item = CartItem.fromFirestore(doc);
+        total += (item.variation.price * item.quantity);
+      }
+
+      return total;
+    } catch (e) {
+      print('Error calculating cart total: $e');
+      return 0.0;
+    }
+  }
+
+
+  Future<void> updateItem(String itemId, Map<String, dynamic> data) async {
+    try {
+      await _cartRef.doc(itemId).update(data);
+    } catch (e) {
+      print('Error updating cart item: $e');
+      throw e;
+    }
+  }
+
+
+  // Optional: Get item count
+  Future<int> getItemCount() async {
+    final snapshot = await _cartRef.get();
+    return snapshot.docs.length;
+  }
+
+  // Add this method to CartService
+  Future<List<CartItem>> getCartItems() async {
+    final snapshot = await _cartRef.get();
+    return snapshot.docs.map((doc) => CartItem.fromFirestore(doc)).toList();
+  }
+
+  // Optional: Get selected items total
+  Future<double> getSelectedItemsTotal() async {
+    try {
+      final snapshot = await _cartRef.get();
+      double total = 0.0;
+
+      for (var doc in snapshot.docs) {
+        final item = CartItem.fromFirestore(doc);
+        if (item.isSelected) {
+          total += (item.variation.price * item.quantity);
+        }
+      }
+
+      return total;
+    } catch (e) {
+      print('Error calculating selected items total: $e');
+      return 0.0;
+    }
+  }
+
+  Future<List<Dealer>> fetchDealers() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance.collection('dealers').get();
+      return snapshot.docs.map((doc) {
+        final data = doc.data();
+        return Dealer(
+          id: doc.id,
+          name: data['name'] ?? '',
+          location: data['location'] ?? '',
+          contactNumber: data['contactNumber'] ?? '',
+        );
+      }).toList();
+    } catch (e) {
+      print('Error fetching dealers: $e');
+      return [];
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +11,7 @@ import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../Resuable_widget/Products.dart';
+import '../firebase_services/cart_services.dart';
 import '../firebase_services/firebase_service.dart';
 
 // Before taking/picking images
@@ -123,7 +125,10 @@ class _ProductPageState extends State<ProductPage> {
   final Color accentColor = Color(0xFFFFA500); // Orange for alerts
   final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  void _addToCart(Product product, ProductVariation variation) {
+  void _addToCart(Product product, ProductVariation variation) async{
+    // In inventory.dart when adding to cart:
+    final cartService = CartService(userId: FirebaseAuth.instance.currentUser!.uid);
+    await cartService.addItem(CartItem(product: product, variation: variation));
     CartManager.instance.addItem(product, variation);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
