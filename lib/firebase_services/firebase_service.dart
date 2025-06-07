@@ -1,11 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../Resuable_widget/Products.dart';
 import 'package:mobistore/Screen/inventory.dart';
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
 
   factory FirestoreService() => _instance;
+
+  // 1. Implement batch loading with appropriate chunk size
+  static const int BATCH_SIZE = 10;
+  // 2. Optimize cache duration based on data update frequency
+  static const Duration cacheDuration = Duration(minutes: 15);
 
   FirestoreService._internal();
 
@@ -15,7 +23,7 @@ class FirestoreService {
   /// Enhanced cache with timestamp
   final Map<String, Product> _cache = {};
   DateTime? _lastCacheUpdate;
-  static const cacheDuration = Duration(minutes: 5);
+  // static const cacheDuration = Duration(minutes: 5);
 
   // Stream controller for real-time updates
   Stream<QuerySnapshot>? _productStream;
