@@ -25,19 +25,40 @@ class CartService {
 
   // Add item to cart
   Future<void> addItem(CartItem item) async {
-    final existingItem = await _cartRef
-        .where('productId', isEqualTo: item.product.id)
-        .where('variationSize', isEqualTo: item.variation.size)
-        .get();
+    try {
+      final existingItemQuery = await _cartRef
+          .where('productId', isEqualTo: item.product.id)
+          .where('variationSize', isEqualTo: item.variation.size)
+          .limit(1)
+          .get();
 
-    if (existingItem.docs.isNotEmpty) {
-      // Update quantity
-      final doc = existingItem.docs.first;
-      final currentQuantity = doc.get('quantity') as int;
-      await doc.reference.update({'quantity': currentQuantity + 1});
-    } else {
-      // Add new item
-      await _cartRef.add(item.toFirestore());
+      final batch = _firestore.batch();
+
+      if (existingItemQuery.docs.isNotEmpty) {
+        final doc = existingItemQuery.docs.first;
+        batch.update(doc.reference, {
+          'quantity': item.quantity,
+          'availableQuantity': item.availableQuantity,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+      } else {
+        final newRef = _cartRef.doc();
+        batch.set(newRef, {
+          'productId': item.product.id,
+          'variationSize': item.variation.size,
+          'product': item.product.toFirestore(),
+          'variation': item.variation.toFirestore(),
+          'quantity': item.quantity,
+          'availableQuantity': item.availableQuantity,
+          'isSelected': item.isSelected,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await batch.commit();
+    } catch (e) {
+      print('Error adding item to cart: $e');
+      throw Exception('Failed to add item to cart: $e');
     }
   }
 

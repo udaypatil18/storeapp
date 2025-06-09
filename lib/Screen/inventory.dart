@@ -125,25 +125,121 @@ class _ProductPageState extends State<ProductPage> {
   final Color accentColor = Color(0xFFFFA500); // Orange for alerts
   final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  void _addToCart(Product product, ProductVariation variation) async{
-    // In inventory.dart when adding to cart:
-    final cartService = CartService(userId: FirebaseAuth.instance.currentUser!.uid);
-    await cartService.addItem(CartItem(product: product, variation: variation));
-    CartManager.instance.addItem(product, variation);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${product.name} (${variation.size}) added to cart'),
-        action: SnackBarAction(
-          label: 'VIEW CART',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => CartPage()),
-            );
-          },
+  // In lib/Screen/inventory.dart - Replace the existing _addToCart method
+// Replace the existing _addToCart method with this optimized version
+  Future<void> _addToCart(Product product, ProductVariation variation) async {
+    // Create controller outside the dialog
+    final quantityController = TextEditingController();
+
+    try {
+      // Show dialog and wait for result
+      final bool? result = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext dialogContext) { // Use dialogContext instead of context
+          return AlertDialog(
+            title: Text('Enter Available Quantity'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Product: ${product.name}',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Size: ${variation.size}'),
+                SizedBox(height: 16),
+                TextField(
+                  controller: quantityController,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Available Quantity',
+                    border: OutlineInputBorder(),
+                    helperText: 'Enter the quantity available for this item',
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(dialogContext).pop(false);
+                },
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (quantityController.text.isEmpty ||
+                      int.tryParse(quantityController.text) == null ||
+                      int.parse(quantityController.text) <= 0) {
+                    ScaffoldMessenger.of(dialogContext).showSnackBar(
+                      SnackBar(content: Text('Please enter a valid quantity')),
+                    );
+                    return;
+                  }
+                  Navigator.of(dialogContext).pop(true);
+                },
+                child: Text('Add to Cart'),
+              ),
+            ],
+          );
+        },
+      );
+
+      // Check if dialog was confirmed
+      if (result == true && mounted) {
+        final availableQuantity = int.parse(quantityController.text);
+
+        // Add to cart using CartService
+        final cartService = CartService(
+            userId: FirebaseAuth.instance.currentUser!.uid
+        );
+
+        final cartItem = CartItem(
+          product: product,
+          variation: variation,
+          availableQuantity: availableQuantity,
+        );
+
+        await cartService.addItem(cartItem);
+
+        // Update local cart manager
+        CartManager.instance.addItem(product, variation);
+
+        if (!mounted) return;
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                '${product.name} (${variation.size}) - $availableQuantity available'
+            ),
+            action: SnackBarAction(
+              label: 'VIEW CART',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => CartPage()),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add to cart: $e'),
+          backgroundColor: Colors.red,
         ),
-      ),
-    );
+      );
+    } finally {
+      // Always dispose the controller
+      quantityController.dispose();
+    }
   }
 
   // Image picker

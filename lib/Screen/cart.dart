@@ -27,6 +27,7 @@ class CartItem {
   final Product product;
   final ProductVariation variation;
   int quantity;
+  int? availableQuantity;
   bool isSelected;
 
   CartItem({
@@ -34,6 +35,7 @@ class CartItem {
     required this.product,
     required this.variation,
     this.quantity = 1,
+    this.availableQuantity,
     this.isSelected = true,
   });
 
@@ -47,6 +49,7 @@ class CartItem {
       product: Product.fromFirestore(data['product'] as Map<String, dynamic>),
       variation: ProductVariation.fromFirestore(data['variation'] as Map<String, dynamic>),
       quantity: data['quantity'] ?? 1,
+      availableQuantity: data['availableQuantity'], // Add this line
       isSelected: data['isSelected'] ?? true,
     );
   }
@@ -59,6 +62,7 @@ class CartItem {
       'product': product.toFirestore(),
       'variation': variation.toFirestore(),
       'quantity': quantity,
+      'availableQuantity': availableQuantity, // Add this line
       'isSelected': isSelected,
     };
   }
@@ -790,6 +794,7 @@ class _CartPageState extends State<CartPage> {
     }
   }
   // Cart list UI
+// In CartPage class, update only the relevant part of _buildCartList method
   Widget _buildCartList(List<CartItem> items) {
     return ListView.builder(
       padding: EdgeInsets.all(16),
@@ -813,27 +818,19 @@ class _CartPageState extends State<CartPage> {
                   activeColor: primaryColor,
                 ),
                 // Product Image
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                    image: item.product.imagePath != null
-                        ? DecorationImage(
-                      image: FileImage(File(item.product.imagePath!)),
-                      fit: BoxFit.cover,
-                    )
-                        : null,
+                if (item.product.imagePath != null)
+                  Container(
+                    width: 70,
+                    height: 70,
+                    margin: EdgeInsets.only(right: 16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      image: DecorationImage(
+                        image: FileImage(File(item.product.imagePath!)),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
                   ),
-                  child: item.product.imagePath == null
-                      ? Icon(
-                    Icons.image_not_supported_outlined,
-                    color: Colors.grey[400],
-                  )
-                      : null,
-                ),
-                SizedBox(width: 16),
                 // Product details
                 Expanded(
                   child: Column(
@@ -849,16 +846,21 @@ class _CartPageState extends State<CartPage> {
                       SizedBox(height: 4),
                       Text(
                         'Size: ${item.variation.size}',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      SizedBox(height: 4),
+                      // Add Available Quantity display here
+                      Text(
+                        'Available Quantity: ${item.availableQuantity ?? "Not set"}',
                         style: TextStyle(
-                          color: Colors.grey[600],
+                          color: Colors.blue[700],
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                       SizedBox(height: 4),
                       Text(
                         'Price: ₹${item.variation.price.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w500,
-                        ),
+                        style: TextStyle(fontWeight: FontWeight.w500),
                       ),
                       SizedBox(height: 8),
                       Row(
@@ -878,7 +880,7 @@ class _CartPageState extends State<CartPage> {
                                   Icon(Icons.edit, size: 16, color: Colors.grey[600]),
                                   SizedBox(width: 4),
                                   Text(
-                                    '${item.quantity}',
+                                    'Quantity: ${item.quantity}gm',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
@@ -906,7 +908,6 @@ class _CartPageState extends State<CartPage> {
       },
     );
   }
-
   Widget _buildCheckoutBar() {
     return StreamBuilder<List<CartItem>>(
       stream: _cartStream,
