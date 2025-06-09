@@ -636,38 +636,38 @@ class _CartPageState extends State<CartPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-      title: Text(
-      'My Cart',
-      style: TextStyle(color: Colors.white),
-    ),
-    backgroundColor: primaryColor,
-    actions: [
-    StreamBuilder<List<CartItem>>(
-    stream: _cartStream,
-    builder: (context, snapshot) {
-    if (!snapshot.hasData || snapshot.data!.isEmpty) {
-    return SizedBox.shrink();
-    }
-    final items = snapshot.data!;
-    final allSelected = items.every((item) => item.isSelected);
-    return Row(
-    children: [
-    Checkbox(
-    value: allSelected,
-    onChanged: (value) => _toggleSelectAll(value, items),
-    activeColor: accentColor,
-    ),
-    Text(
-    'Select All',
-    style: TextStyle(color: Colors.white),
-    ),
-    SizedBox(width: 16),
-    ],
-    );
-    },
-    ),
-    ],
-    ),
+        title: Text(
+          'My Cart',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: primaryColor,
+        actions: [
+          StreamBuilder<List<CartItem>>(
+            stream: _cartStream,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return SizedBox.shrink();
+              }
+              final items = snapshot.data!;
+              final allSelected = items.every((item) => item.isSelected);
+              return Row(
+                children: [
+                  Checkbox(
+                    value: allSelected,
+                    onChanged: (value) => _toggleSelectAll(value, items),
+                    activeColor: accentColor,
+                  ),
+                  Text(
+                    'Select All',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  SizedBox(width: 16),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<List<CartItem>>(
         stream: _cartStream,
         builder: (context, snapshot) {
@@ -866,35 +866,44 @@ class _CartPageState extends State<CartPage> {
                       Row(
                         children: [
                           // Quantity adjustment
-                          GestureDetector(
-                            onTap: () => _showQuantityDialog(item),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.edit, size: 16, color: Colors.grey[600]),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'Quantity: ${item.quantity}gm',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => _showQuantityDialog(item),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.edit, size: 14, color: Colors.grey[600]),
+                                    SizedBox(width: 2),
+                                    Flexible(
+                                      child: Text(
+                                        '${item.quantity}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                           Spacer(),
                           // Remove button
                           IconButton(
-                            icon: Icon(Icons.delete_outline, color: Colors.red),
+                            icon: Icon(Icons.delete_outline, color: Colors.red,size: 20,),
+                            padding: EdgeInsets.zero,
+                            constraints: BoxConstraints(),
                             onPressed: () => _removeFromCart(item),
+                            visualDensity: VisualDensity.compact,
                           ),
                         ],
                       ),

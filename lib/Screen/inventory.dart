@@ -405,32 +405,32 @@ class _ProductPageState extends State<ProductPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             ElevatedButton(
-              child: Text('Update'),
-              onPressed: () async {
-                final newStock = int.tryParse(stockController.text);
-                if (newStock != null && newStock >= 0) {
-                  try {
-                    setState(() {
-                      variation.updateStock(newStock);
-                      product.lastRestocked = DateTime.now();
-                    });
+                child: Text('Update'),
+                onPressed: () async {
+                  final newStock = int.tryParse(stockController.text);
+                  if (newStock != null && newStock >= 0) {
+                    try {
+                      setState(() {
+                        variation.updateStock(newStock);
+                        product.lastRestocked = DateTime.now();
+                      });
 
-                    await _updateProduct(product); // Save to Firestore
-                    Navigator.of(context).pop();
+                      await _updateProduct(product); // Save to Firestore
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Stock updated successfully')),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating stock: $e')),
+                      );
+                    }
+                  } else {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Stock updated successfully')),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error updating stock: $e')),
+                      SnackBar(content: Text('Please enter a valid stock quantity')),
                     );
                   }
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please enter a valid stock quantity')),
-                  );
                 }
-              }
             ),
           ],
         );
@@ -490,52 +490,52 @@ class _ProductPageState extends State<ProductPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             ElevatedButton(
-              child: Text('Add Variation'),
-              onPressed: () async {
-                // Validate inputs
-                if (sizeController.text.isEmpty ||
-                    stockController.text.isEmpty ||
-                    priceController.text.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please fill all fields')),
-                  );
-                  return;
+                child: Text('Add Variation'),
+                onPressed: () async {
+                  // Validate inputs
+                  if (sizeController.text.isEmpty ||
+                      stockController.text.isEmpty ||
+                      priceController.text.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
+                  }
+
+                  final newStock = int.parse(stockController.text);
+                  final newPrice = double.parse(priceController.text);
+
+                  // Determine initial status
+                  ProductStatus initialStatus;
+                  if (newStock == 0) {
+                    initialStatus = ProductStatus.outOfStock;
+                  } else {
+                    initialStatus = ProductStatus.inStock;
+                  }
+
+                  try {
+                    // Add new variation
+                    setState(() {
+                      product.variations.add(ProductVariation(
+                        size: sizeController.text,
+                        stock: newStock,
+                        price: newPrice,
+                        status: initialStatus,
+                      ));
+                      product.lastRestocked = DateTime.now();
+                    });
+
+                    await _updateProduct(product); // Save to Firestore
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Variation added successfully')),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error adding variation: $e')),
+                    );
+                  }
                 }
-
-                final newStock = int.parse(stockController.text);
-                final newPrice = double.parse(priceController.text);
-
-                // Determine initial status
-                ProductStatus initialStatus;
-                if (newStock == 0) {
-                  initialStatus = ProductStatus.outOfStock;
-                } else {
-                  initialStatus = ProductStatus.inStock;
-                }
-
-                try {
-                  // Add new variation
-                  setState(() {
-                    product.variations.add(ProductVariation(
-                      size: sizeController.text,
-                      stock: newStock,
-                      price: newPrice,
-                      status: initialStatus,
-                    ));
-                    product.lastRestocked = DateTime.now();
-                  });
-
-                  await _updateProduct(product); // Save to Firestore
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Variation added successfully')),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error adding variation: $e')),
-                  );
-                }
-              }
 
             ),
           ],
