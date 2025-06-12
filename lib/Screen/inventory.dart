@@ -48,10 +48,15 @@ class _ProductPageState extends State<ProductPage> {
     _loadProducts();
   }
 
+  // Update the _loadProducts method
   Future<void> _loadProducts() async {
     setState(() => isLoading = true);
     try {
-      final loadedProducts = await _firestoreService.getProducts();
+      // Force a fresh fetch from server
+      final loadedProducts = await _firestoreService.getProducts(
+          limit: 20,
+          forceRefresh: true  // Add this parameter to FirestoreService
+      );
       setState(() {
         products = loadedProducts;
         isLoading = false;
@@ -68,7 +73,7 @@ class _ProductPageState extends State<ProductPage> {
   // Update your existing _addNewProduct method
   Future<void> _addNewProduct(Product product) async {
     try {
-      setState(() => isLoading = true); // Show loading indicator
+      setState(() => isLoading = true);
 
       // Add product to Firestore
       String productId = await _firestoreService.addProduct(product);
@@ -76,21 +81,25 @@ class _ProductPageState extends State<ProductPage> {
       // Update the product with the new ID
       product.id = productId;
 
-      // Reload the products list
+      // Clear cache and force refresh
+      await _firestoreService.clearCache(forceRefresh: true);
+
+      // Reload products
       await _loadProducts();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Product added successfully')),
       );
     } catch (e) {
-      print('Error adding product: $e'); // Add logging
+      print('Error adding product: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error adding product: $e')),
       );
     } finally {
-      setState(() => isLoading = false); // Hide loading indicator
+      setState(() => isLoading = false);
     }
   }
+
 
   // Update your existing methods to use Firestore
   // Update your existing methods to use Firestore

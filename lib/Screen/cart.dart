@@ -44,25 +44,31 @@ class CartItem {
   // Create CartItem from Firestore document
   factory CartItem.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Create a DocumentSnapshot for the product data
+    final productData = data['product'] as Map<String, dynamic>;
+    productData['id'] = data['productId']; // Ensure ID is included
+
     return CartItem(
       id: doc.id,
-      product: Product.fromFirestore(data['product'] as Map<String, dynamic>),
+      product: Product.fromMap(productData), // Changed from fromFirestore to fromMap
       variation: ProductVariation.fromFirestore(data['variation'] as Map<String, dynamic>),
       quantity: data['quantity'] ?? 1,
-      availableQuantity: data['availableQuantity'], // Add this line
+      availableQuantity: data['availableQuantity'],
       isSelected: data['isSelected'] ?? true,
     );
   }
+
 
   // Convert CartItem to Firestore data
   // Modify the toFirestore method in CartItem class
   Map<String, dynamic> toFirestore() {
     return {
       'productId': product.id,
-      'product': product.toFirestore(),
+      'product': product.toFirestore(), // Using toFirestore instead of toMap
       'variation': variation.toFirestore(),
       'quantity': quantity,
-      'availableQuantity': availableQuantity, // Add this line
+      'availableQuantity': availableQuantity,
       'isSelected': isSelected,
     };
   }
