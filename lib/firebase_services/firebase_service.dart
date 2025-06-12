@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../Resuable_widget/Products.dart';
 import 'package:mobistore/Screen/inventory.dart';
 import 'dart:async';
@@ -28,16 +29,13 @@ class FirestoreService {
   // Stream controller for real-time updates
   Stream<QuerySnapshot>? _productStream;
 
-  void initializeFirestore() {
+  void _initializeFirestore() {
     _firestore.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       sslEnabled: true,
-      host: 'firestore.googleapis.com',
-      ignoreUndefinedProperties: true,
     );
 
-    // Enable offline persistence
     _firestore.enablePersistence(const PersistenceSettings(
       synchronizeTabs: true,
     ));
@@ -59,21 +57,19 @@ class FirestoreService {
 
 
   // Get products with pagination for initial load
-  // In FirestoreService class
   Future<List<Product>> getProducts({
     int limit = 20,
     DocumentSnapshot? lastDocument,
-    bool forceRefresh = false, // Add this parameter
+    bool forceRefresh = false,
   }) async {
     try {
-      // Skip cache if forceRefresh is true
+      // Skip cache if forcing refresh
       if (!forceRefresh && _isCacheValid()) {
-        print('Returning cached products');
         return _cache.values.toList()
           ..sort((a, b) => b.lastRestocked.compareTo(a.lastRestocked));
       }
 
-      // Create an optimized query
+      // Your existing query code
       Query query = _firestore
           .collection(_productsCollection)
           .orderBy('timestamp', descending: true)
@@ -83,11 +79,8 @@ class FirestoreService {
         query = query.startAfterDocument(lastDocument);
       }
 
-      // Force server data if forceRefresh is true
       final snapshot = await query.get(
-        GetOptions(
-          source: forceRefresh ? Source.server : Source.serverAndCache,
-        ),
+        GetOptions(source: forceRefresh ? Source.server : Source.serverAndCache),
       );
 
       final products = <Product>[];
@@ -101,15 +94,14 @@ class FirestoreService {
       return products;
     } catch (e) {
       print('Error fetching products: $e');
-      // Only return cache if not forcing refresh
       if (!forceRefresh && _cache.isNotEmpty) {
-        print('Returning cached products due to error');
         return _cache.values.toList()
           ..sort((a, b) => b.lastRestocked.compareTo(a.lastRestocked));
       }
       rethrow;
     }
   }
+
 
   bool _isCacheValid() {
     if (_cache.isEmpty || _lastCacheUpdate == null) return false;
@@ -127,30 +119,29 @@ class FirestoreService {
 
 
   // Add a new product with optimized write
+  // In your FirestoreService class
   Future<String> addProduct(Product product) async {
     try {
       final productData = {
-        ...product.toMap(),
+        ...product.toFirestore(),
         'timestamp': FieldValue.serverTimestamp(),
       };
 
-      // Optimize write with server timestamp
-      final DocumentReference docRef = _firestore
+      final DocumentReference docRef = await _firestore
           .collection(_productsCollection)
-          .doc();
+          .add(productData);
 
-      await docRef.set(
-        productData,
-        SetOptions(merge: true),
-      );
+      // Clear cache immediately after adding
+      _cache.clear();
+      _lastCacheUpdate = null;
 
-      _cache[docRef.id] = product; // Update cache
       return docRef.id;
     } catch (e) {
       print('Error adding product: $e');
       throw e;
     }
   }
+
 
   Future<Product?> getProduct(String productId) async {
     try {
@@ -204,17 +195,17 @@ class FirestoreService {
   }
 
   // Update single product
-  Future<void> updateProduct(String productId, Product product) async {
+  Future<void> updateProduct(String productId, dynamic data) async {
     try {
-      await _firestore
-          .collection(_productsCollection)
-          .doc(productId)
-          .update({
-        ...product.toMap(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      _cache[productId] = product; // Update cache
+      if (data is Product) {
+        await _firestore.collection(_productsCollection)  // Use _productsCollection
+            .doc(productId)
+            .update(data.toFirestore());
+      } else if (data is Map<String, dynamic>) {
+        await _firestore.collection(_productsCollection)  // Use _productsCollection
+            .doc(productId)
+            .update(data);
+      }
     } catch (e) {
       print('Error updating product: $e');
       throw e;

@@ -49,14 +49,13 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Update the _loadProducts method
+  // Update the _loadProducts method
   Future<void> _loadProducts() async {
     setState(() => isLoading = true);
     try {
-      // Force a fresh fetch from server
-      final loadedProducts = await _firestoreService.getProducts(
-          limit: 20,
-          forceRefresh: true  // Add this parameter to FirestoreService
-      );
+      // Force a fresh fetch from server by clearing cache first
+      await _firestoreService.clearCache();
+      final loadedProducts = await _firestoreService.getProducts();
       setState(() {
         products = loadedProducts;
         isLoading = false;
@@ -77,15 +76,15 @@ class _ProductPageState extends State<ProductPage> {
 
       // Add product to Firestore
       String productId = await _firestoreService.addProduct(product);
-
-      // Update the product with the new ID
       product.id = productId;
 
-      // Clear cache and force refresh
-      await _firestoreService.clearCache(forceRefresh: true);
+      // Force a fresh load
+      final loadedProducts = await _firestoreService.getProducts(forceRefresh: true);
 
-      // Reload products
-      await _loadProducts();
+      setState(() {
+        products = loadedProducts;
+        isLoading = false;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Product added successfully')),
@@ -99,7 +98,6 @@ class _ProductPageState extends State<ProductPage> {
       setState(() => isLoading = false);
     }
   }
-
 
   // Update your existing methods to use Firestore
   // Update your existing methods to use Firestore
