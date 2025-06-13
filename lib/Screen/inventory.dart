@@ -16,15 +16,11 @@ import '../firebase_services/firebase_service.dart';
 
 // Before taking/picking images
 Future<void> requestPermissions() async {
-  Map<Permission, PermissionStatus> statuses = await [
-    Permission.camera,
-    Permission.storage,
-  ].request();
+  final status = await Permission.storage.request();
 
-  if (statuses[Permission.camera]!.isDenied ||
-      statuses[Permission.storage]!.isDenied) {
+  if (status.isDenied) {
     SnackBar(
-      content: Text("Please allow the camera permission of taking pictures!"),
+      content: Text("Please allow storage permission for selecting images!"),
     );
   }
 }
@@ -49,7 +45,6 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Update the _loadProducts method
-  // Update the _loadProducts method
   Future<void> _loadProducts() async {
     setState(() => isLoading = true);
     try {
@@ -68,7 +63,6 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-  // Update your existing _addNewProduct method
   // Update your existing _addNewProduct method
   Future<void> _addNewProduct(Product product) async {
     try {
@@ -99,7 +93,6 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-  // Update your existing methods to use Firestore
   // Update your existing methods to use Firestore
   Future<void> _updateProduct(Product product) async {
     if (product.id == null) {
@@ -132,8 +125,6 @@ class _ProductPageState extends State<ProductPage> {
   final Color accentColor = Color(0xFFFFA500); // Orange for alerts
   final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  // In lib/Screen/inventory.dart - Replace the existing _addToCart method
-// Replace the existing _addToCart method with this optimized version
   Future<void> _addToCart(Product product, ProductVariation variation) async {
     // Create controller outside the dialog
     final quantityController = TextEditingController();
@@ -251,6 +242,7 @@ class _ProductPageState extends State<ProductPage> {
 
   // Image picker
   final ImagePicker _picker = ImagePicker();
+  String? tempImagePath;
 
   // Dealers list
   List<Dealer> dealersList = [];
@@ -260,40 +252,8 @@ class _ProductPageState extends State<ProductPage> {
   String _searchQuery = '';
   ProductStatus? _filterStatus;
 
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   // Initialize dealers list
-  //   dealersList = getDealers();
-  // }
-
-  // Take a picture with camera
-  Future<void> _takePicture(Product product) async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 90,
-      );
-
-      if (image != null) {
-        setState(() {
-          product.imagePath = image.path;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product image updated')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to take picture: $e')),
-      );
-    }
-  }
-
   // Pick image from gallery
+  // Optimize gallery image picking
   Future<void> _pickImage(Product product) async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -309,8 +269,30 @@ class _ProductPageState extends State<ProductPage> {
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product image updated')),
+          SnackBar(content: Text('Product image updated successfully')),
         );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pick image: $e')),
+      );
+    }
+  }
+
+  // Optimize image picking for new products
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 90,
+      );
+
+      if (image != null) {
+        setState(() {
+          tempImagePath = image.path;
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,26 +323,13 @@ class _ProductPageState extends State<ProductPage> {
                   ),
                 ),
               SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  ElevatedButton.icon(
-                    icon: Icon(Icons.camera_alt),
-                    label: Text('Camera'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _takePicture(product);
-                    },
-                  ),
-                  ElevatedButton.icon(
-                    icon: Icon(Icons.photo_library),
-                    label: Text('Gallery'),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      _pickImage(product);
-                    },
-                  ),
-                ],
+              ElevatedButton.icon(
+                icon: Icon(Icons.photo_library),
+                label: Text('Select from Gallery'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _pickImage(product);
+                },
               ),
             ],
           ),
@@ -450,7 +419,7 @@ class _ProductPageState extends State<ProductPage> {
     final sizeController = TextEditingController();
     final stockController = TextEditingController();
     final priceController = TextEditingController();
-    final reorderPointController = TextEditingController();
+   // final reorderPointController = TextEditingController();
 
     showDialog(
       context: context,
@@ -552,54 +521,10 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Add New Product Dialog with Camera Option
+  // Update _showAddProductDialog to remove camera option
   void _showAddProductDialog() {
     final nameController = TextEditingController();
     final categoryController = TextEditingController();
-    String? tempImagePath;
-
-    // Function to take a picture
-    Future<void> _captureImage() async {
-      try {
-        final XFile? image = await _picker.pickImage(
-          source: ImageSource.camera,
-          maxWidth: 800,
-          maxHeight: 800,
-          imageQuality: 90,
-        );
-
-        if (image != null) {
-          setState(() {
-            tempImagePath = image.path;
-          });
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to take picture: $e')),
-        );
-      }
-    }
-
-    // Function to pick image from gallery
-    Future<void> _pickImageFromGallery() async {
-      try {
-        final XFile? image = await _picker.pickImage(
-          source: ImageSource.gallery,
-          maxWidth: 800,
-          maxHeight: 800,
-          imageQuality: 90,
-        );
-
-        if (image != null) {
-          setState(() {
-            tempImagePath = image.path;
-          });
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick image: $e')),
-        );
-      }
-    }
 
     showDialog(
       context: context,
@@ -612,7 +537,7 @@ class _ProductPageState extends State<ProductPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Image Preview or Capture Button
+                    // Image preview container
                     Container(
                       height: 150,
                       width: double.infinity,
@@ -632,40 +557,26 @@ class _ProductPageState extends State<ProductPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.image,
-                                size: 50, color: Colors.grey),
+                            Icon(Icons.image, size: 50, color: Colors.grey),
                             Text('No Image Selected'),
                           ],
                         ),
                       ),
                     ),
-                    SizedBox(height: 10),
+                    SizedBox(height: 16),
 
-                    // Image Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          icon: Icon(Icons.camera_alt),
-                          label: Text('Camera'),
-                          onPressed: () async {
-                            await _captureImage();
-                            setDialogState(() {});
-                          },
-                        ),
-                        ElevatedButton.icon(
-                          icon: Icon(Icons.photo_library),
-                          label: Text('Gallery'),
-                          onPressed: () async {
-                            await _pickImageFromGallery();
-                            setDialogState(() {});
-                          },
-                        ),
-                      ],
+                    // Gallery selection button
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.photo_library),
+                      label: Text('Select from Gallery'),
+                      onPressed: () async {
+                        await _pickImageFromGallery();
+                        setDialogState(() {}); // Refresh dialog UI
+                      },
                     ),
-                    SizedBox(height: 20),
+                    SizedBox(height: 16),
 
-                    // Product Name
+                    // Product Name field
                     TextField(
                       controller: nameController,
                       decoration: InputDecoration(
@@ -673,29 +584,14 @@ class _ProductPageState extends State<ProductPage> {
                         border: OutlineInputBorder(),
                       ),
                     ),
-                    SizedBox(height: 10),
+                    SizedBox(height: 16),
 
-                    // Category
+                    // Category field
                     TextField(
                       controller: categoryController,
                       decoration: InputDecoration(
                         labelText: 'Category',
                         border: OutlineInputBorder(),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-
-                    // Note about variations
-                    Container(
-                      padding: EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.amber[50],
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber),
-                      ),
-                      child: Text(
-                        'You will be able to add product variations (sizes, weights) after creating the product.',
-                        style: TextStyle(fontSize: 12),
                       ),
                     ),
                   ],
@@ -704,35 +600,41 @@ class _ProductPageState extends State<ProductPage> {
               actions: [
                 TextButton(
                   child: Text('Cancel'),
-                  onPressed: () => Navigator.of(context).pop(),
+                  onPressed: () {
+                    setState(() {
+                      tempImagePath = null; // Clear the temporary image
+                    });
+                    Navigator.of(context).pop();
+                  },
                 ),
                 ElevatedButton(
-                  child: Text('Add Product'),
-                  onPressed: () async{
+                  child: Text('Save'),
+                  onPressed: () async {
                     // Validate inputs
                     if (nameController.text.isEmpty || categoryController.text.isEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Please fill all fields')),
+                        SnackBar(content: Text('Please fill in all fields')),
                       );
                       return;
                     }
 
-                    // Add new product
+                    // Create new product
                     final newProduct = Product(
                       name: nameController.text,
-                      imagePath: tempImagePath,
                       category: categoryController.text,
+                      imagePath: tempImagePath,
+                      variations: [],
                       lastRestocked: DateTime.now(),
-                      variations: [], // Empty variations list
                     );
 
-                    Navigator.of(context).pop();
-
-                    // Add product to Firestore
+                    // Add product
                     await _addNewProduct(newProduct);
 
-                    // Show add variation dialog
-                    _showAddVariationDialog(newProduct);
+                    // Clear temporary image and close dialog
+                    setState(() {
+                      tempImagePath = null;
+                    });
+                    Navigator.of(context).pop();
                   },
                 ),
               ],
