@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../Resuable_widget/Products.dart';
 import '../firebase_services/cart_services.dart';
 import '../firebase_services/firebase_service.dart';
+import '../firebase_services/image_storage.dart';
 
 // Before taking/picking images
 Future<void> requestPermissions() async {
@@ -72,24 +74,26 @@ class _ProductPageState extends State<ProductPage> {
       String productId = await _firestoreService.addProduct(product);
       product.id = productId;
 
-      // Force a fresh load
-      final loadedProducts = await _firestoreService.getProducts(forceRefresh: true);
-
+      // Update local list instead of reloading all products
       setState(() {
-        products = loadedProducts;
+        products.add(product);
         isLoading = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Product added successfully')),
-      );
+      // Show success message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Product added successfully')),
+        );
+      }
+
     } catch (e) {
       print('Error adding product: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding product: $e')),
-      );
-    } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error adding product: $e')),
+        );
+      }
     }
   }
 
@@ -286,18 +290,27 @@ class _ProductPageState extends State<ProductPage> {
         source: ImageSource.gallery,
         maxWidth: 800,
         maxHeight: 800,
-        imageQuality: 90,
+        imageQuality: 85,
       );
 
-      if (image != null) {
-        setState(() {
-          tempImagePath = image.path;
-        });
+      if (image != null && mounted) {
+        final String? permanentPath = await compute(
+            ImageStorage.moveToPermStorage,
+            image.path
+        );
+
+        if (permanentPath != null && mounted) {
+          setState(() {
+            tempImagePath = permanentPath;
+          });
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick image: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to pick image: $e')),
+        );
+      }
     }
   }
 
@@ -618,23 +631,37 @@ class _ProductPageState extends State<ProductPage> {
                       return;
                     }
 
+                    // Store values before clearing
+                    final productName = nameController.text;
+                    final productCategory = categoryController.text;
+                    final savedImagePath = tempImagePath;
+
                     // Create new product
                     final newProduct = Product(
-                      name: nameController.text,
-                      category: categoryController.text,
-                      imagePath: tempImagePath,
+                      name: productName,
+                      category: productCategory,
+                      imagePath: savedImagePath,
                       variations: [],
                       lastRestocked: DateTime.now(),
                     );
 
+                    // Close dialog first to prevent UI blocking
+                    Navigator.of(context).pop();
+
                     // Add product
                     await _addNewProduct(newProduct);
 
-                    // Clear temporary image and close dialog
+                    // Clear temporary image
                     setState(() {
                       tempImagePath = null;
                     });
-                    Navigator.of(context).pop();
+
+                    // Show add variation dialog after a brief delay to allow UI to settle
+                    if (mounted) {
+                      Future.microtask(() {
+                        _showAddVariationDialog(newProduct);
+                      });
+                    }
                   },
                 ),
               ],
