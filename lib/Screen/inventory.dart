@@ -47,11 +47,10 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Update the _loadProducts method
+  // Optimize _loadProducts method in inventory.dart
   Future<void> _loadProducts() async {
-    setState(() => isLoading = true);
     try {
-      // Force a fresh fetch from server by clearing cache first
-      await _firestoreService.clearCache();
+      // Don't clear cache every time, only when explicitly requested
       final loadedProducts = await _firestoreService.getProducts();
       setState(() {
         products = loadedProducts;
@@ -812,6 +811,7 @@ class _ProductPageState extends State<ProductPage> {
   }
 
   // Delete Product Method
+  // Optimize delete product method in inventory.dart
   void _deleteProduct(Product product) {
     if (product.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -835,16 +835,20 @@ class _ProductPageState extends State<ProductPage> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: Text('Delete'),
               onPressed: () async {
+                // Close dialog immediately
+                Navigator.of(context).pop();
+
                 try {
                   setState(() => isLoading = true);
+                  // Delete product in background
                   await _firestoreService.deleteProduct(product.id!);
 
+                  // Update UI after successful deletion
                   setState(() {
                     products.remove(product);
                     isLoading = false;
                   });
 
-                  Navigator.of(context).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Product deleted successfully')),
                   );
@@ -853,7 +857,6 @@ class _ProductPageState extends State<ProductPage> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error deleting product: $e')),
                   );
-                  Navigator.of(context).pop();
                 }
               },
             ),
