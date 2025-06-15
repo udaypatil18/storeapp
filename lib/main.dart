@@ -4,7 +4,7 @@ import 'package:mobistore/Authentication/login.dart';
 import 'package:mobistore/home.dart';
 import 'package:mobistore/Authentication/sing_up.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:mobistore/firebase_services/firebase_service.dart';
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
