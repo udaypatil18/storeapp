@@ -111,7 +111,7 @@ class _CartPageState extends State<CartPage> {
     // Initialize cart service with current user ID
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      _cartService = CartService(userId: user.uid);
+      _cartService = CartService();
       _cartStream = _cartService.streamCartItems();
       _loadDealers();
     }

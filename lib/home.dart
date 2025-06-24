@@ -17,6 +17,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+
   // Dashboard items configuration with more detailed descriptions
   final List<DashboardItem> _dashboardItems = [
     DashboardItem(
@@ -51,7 +52,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
         title: Text(
-          'MobiStore',
+          'D-Mall',
           style: GoogleFonts.montserrat(
             fontWeight: FontWeight.bold,
             letterSpacing: 1.1,

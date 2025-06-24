@@ -6,21 +6,14 @@ import '../Screen/Delaers.dart';
 
 class CartService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final String userId;
 
-  CartService({required this.userId});
-
-  // Collection reference
-  CollectionReference get _cartRef =>
-      _firestore.collection('users').doc(userId).collection('cart');
+  // Global shared cart for all users
+  CollectionReference get _cartRef => _firestore.collection('global_cart');
 
   // Stream cart items
   Stream<List<CartItem>> streamCartItems() {
-    return _cartRef
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-        .map((doc) => CartItem.fromFirestore(doc))
-        .toList());
+    return _cartRef.snapshots().map((snapshot) =>
+        snapshot.docs.map((doc) => CartItem.fromFirestore(doc)).toList());
   }
 
   // Add item to cart
@@ -84,7 +77,7 @@ class CartService {
     await batch.commit();
   }
 
-  // Get cart total - Fixed implementation
+  // Get cart total
   Future<double> getCartTotal() async {
     try {
       final snapshot = await _cartRef.get();
@@ -102,7 +95,6 @@ class CartService {
     }
   }
 
-
   Future<void> updateItem(String itemId, Map<String, dynamic> data) async {
     try {
       await _cartRef.doc(itemId).update(data);
@@ -112,20 +104,16 @@ class CartService {
     }
   }
 
-
-  // Optional: Get item count
   Future<int> getItemCount() async {
     final snapshot = await _cartRef.get();
     return snapshot.docs.length;
   }
 
-  // Add this method to CartService
   Future<List<CartItem>> getCartItems() async {
     final snapshot = await _cartRef.get();
     return snapshot.docs.map((doc) => CartItem.fromFirestore(doc)).toList();
   }
 
-  // Optional: Get selected items total
   Future<double> getSelectedItemsTotal() async {
     try {
       final snapshot = await _cartRef.get();

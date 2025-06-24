@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:mobistore/Screen/cart.dart';
+import 'package:mobistore/home.dart';
 import 'package:mobistore/utility/dealer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -43,7 +44,10 @@ class _ProductPageState extends State<ProductPage> {
   @override
   void initState() {
     super.initState();
-    _loadProducts();
+    // Defer Firebase work to after first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProducts();
+    });
   }
 
   // Update the _loadProducts method
@@ -128,23 +132,22 @@ class _ProductPageState extends State<ProductPage> {
   final Color accentColor = Color(0xFFFFA500); // Orange for alerts
   final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  Future<void> _addToCart(Product product, ProductVariation variation) async {
-    // Create controller outside the dialog
-    final quantityController = TextEditingController();
 
+  Future<void> _addToCart(Product product, ProductVariation variation) async {
     try {
-      // Show dialog and wait for result
-      final bool? result = await showDialog<bool>(
+      // Show dialog and wait for quantity
+      final int? availableQuantity = await showDialog<int>(
         context: context,
         barrierDismissible: false,
-        builder: (BuildContext dialogContext) { // Use dialogContext instead of context
+        builder: (BuildContext dialogContext) {
+          final TextEditingController quantityController = TextEditingController();
+
           return AlertDialog(
             title: Text('Enter Available Quantity'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('Product: ${product.name}',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text('Product: ${product.name}', style: TextStyle(fontWeight: FontWeight.bold)),
                 Text('Size: ${variation.size}'),
                 SizedBox(height: 16),
                 TextField(
@@ -165,21 +168,20 @@ class _ProductPageState extends State<ProductPage> {
             actions: [
               TextButton(
                 onPressed: () {
-                  Navigator.of(dialogContext).pop(false);
+                  Navigator.of(dialogContext).pop(null); // Cancel = return null
                 },
                 child: Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (quantityController.text.isEmpty ||
-                      int.tryParse(quantityController.text) == null ||
-                      int.parse(quantityController.text) <= 0) {
+                  final text = quantityController.text;
+                  if (text.isEmpty || int.tryParse(text) == null || int.parse(text) <= 0) {
                     ScaffoldMessenger.of(dialogContext).showSnackBar(
                       SnackBar(content: Text('Please enter a valid quantity')),
                     );
                     return;
                   }
-                  Navigator.of(dialogContext).pop(true);
+                  Navigator.of(dialogContext).pop(int.parse(text)); // Return quantity
                 },
                 child: Text('Add to Cart'),
               ),
@@ -188,60 +190,47 @@ class _ProductPageState extends State<ProductPage> {
         },
       );
 
-      // Check if dialog was confirmed
-      if (result == true && mounted) {
-        final availableQuantity = int.parse(quantityController.text);
+      // Handle cancel
+      if (availableQuantity == null) return;
 
-        // Add to cart using CartService
-        final cartService = CartService(
-            userId: FirebaseAuth.instance.currentUser!.uid
-        );
+      // ✅ Add to cart using CartService
+      final cartService = CartService(); // global/shared cart
+      final cartItem = CartItem(
+        product: product,
+        variation: variation,
+        availableQuantity: availableQuantity,
+      );
 
-        final cartItem = CartItem(
-          product: product,
-          variation: variation,
-          availableQuantity: availableQuantity,
-        );
+      await cartService.addItem(cartItem);
+      CartManager.instance.addItem(product, variation);
 
-        await cartService.addItem(cartItem);
-
-        // Update local cart manager
-        CartManager.instance.addItem(product, variation);
-
-        if (!mounted) return;
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                '${product.name} (${variation.size}) - $availableQuantity available'
-            ),
-            action: SnackBarAction(
-              label: 'VIEW CART',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => CartPage()),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    } catch (e) {
       if (!mounted) return;
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${product.name} (${variation.size}) - $availableQuantity available'),
+          action: SnackBarAction(
+            label: 'VIEW CART',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => CartPage()),
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to add to cart: $e'),
           backgroundColor: Colors.red,
         ),
       );
-    } finally {
-      // Always dispose the controller
-      quantityController.dispose();
     }
   }
+
 
   // Image picker
   final ImagePicker _picker = ImagePicker();
@@ -431,7 +420,7 @@ class _ProductPageState extends State<ProductPage> {
     final sizeController = TextEditingController();
     final stockController = TextEditingController();
     final priceController = TextEditingController();
-   // final reorderPointController = TextEditingController();
+    // final reorderPointController = TextEditingController();
 
     showDialog(
       context: context,
