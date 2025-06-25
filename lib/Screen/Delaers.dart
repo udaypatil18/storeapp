@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../firebase_services/dealer_firebase_service.dart';
-import '../utility/dealer.dart' as DealerUtil;
 
 class Dealer {
   String? id;
@@ -16,7 +14,6 @@ class Dealer {
     required this.contactNumber,
   });
 
-  // Add these methods to work with Firestore
   factory Dealer.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return Dealer(
@@ -35,6 +32,7 @@ class Dealer {
     };
   }
 }
+
 class DealersPage extends StatefulWidget {
   const DealersPage({Key? key}) : super(key: key);
 
@@ -44,27 +42,21 @@ class DealersPage extends StatefulWidget {
 
 class _DealersPageState extends State<DealersPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  // Enhanced color palette
-  final Color primaryColor = Color(0xFF006A4E); // Deep Teal
-  final Color secondaryColor = Color(0xFF00876A); // Lighter Teal
-  final Color accentColor = Color(0xFFFFA500); // Orange for alerts
-  final Color backgroundColor = Color(0xFFF5F5F5); // Light background
 
-  final DealerFirestoreService _dealerService = DealerFirestoreService();
+  final Color primaryColor = const Color(0xFF006A4E);
+  final Color secondaryColor = const Color(0xFF00876A);
+  final Color accentColor = const Color(0xFFFFA500);
+  final Color backgroundColor = const Color(0xFFF5F5F5);
 
-  // List to store dealers - using the Dealer class from utility
-
-
-  // Controllers for the add dealer form
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
-  // Method to show add dealer bottom sheet
+
   void _showAddDealerBottomSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: RoundedRectangleBorder(
+      shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
       ),
       backgroundColor: backgroundColor,
@@ -75,142 +67,89 @@ class _DealersPageState extends State<DealersPage> {
           left: 20,
           right: 20,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Add New Dealer',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: primaryColor,
-              ),
-            ),
-            const SizedBox(height: 20),
-            _buildTextField(_nameController, 'Dealer Name', Icons.store),
-            const SizedBox(height: 10),
-            _buildTextField(_contactController, 'Contact Number', Icons.phone,
-                TextInputType.phone),
-            const SizedBox(height: 10),
-            _buildTextField(
-                _locationController, 'Location', Icons.location_city),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _addDealer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              Text('Add New Dealer',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: primaryColor)),
+              const SizedBox(height: 20),
+              _buildTextField(_nameController, 'Dealer Name', Icons.store),
+              const SizedBox(height: 10),
+              _buildTextField(_contactController, 'Contact Number', Icons.phone, TextInputType.phone),
+              const SizedBox(height: 10),
+              _buildTextField(_locationController, 'Location', Icons.location_city),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: _addDealer,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
+                child: const Text('Add Dealer', style: TextStyle(color: Colors.white)),
               ),
-              child: Text(
-                'Add Dealer',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Helper method to build consistent text fields
-  Widget _buildTextField(
-      TextEditingController controller, String labelText, IconData prefixIcon,
-      [TextInputType? keyboardType, int? maxLines = 1]) {
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon,
+      [TextInputType? type]) {
     return TextField(
       controller: controller,
+      keyboardType: type,
       decoration: InputDecoration(
-        labelText: labelText,
-        prefixIcon: Icon(prefixIcon, color: primaryColor),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: primaryColor),
-        ),
+        labelText: label,
+        prefixIcon: Icon(icon, color: primaryColor),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: primaryColor, width: 2),
         ),
       ),
-      keyboardType: keyboardType,
-      maxLines: maxLines,
     );
   }
 
-  // Method to add a new dealer
-  void _addDealer() async {
+  Future<void> _addDealer() async {
     if (_nameController.text.isEmpty ||
         _contactController.text.isEmpty ||
         _locationController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill all required fields'),
-          backgroundColor: accentColor,
-        ),
+        SnackBar(content: const Text('Please fill all required fields'), backgroundColor: accentColor),
       );
       return;
     }
 
     try {
-      // Add to Firestore
       await _firestore.collection('dealers').add({
         'name': _nameController.text,
         'location': _locationController.text,
         'contactNumber': _contactController.text,
         'timestamp': FieldValue.serverTimestamp(),
       });
-
-      // Clear only used controllers
       _nameController.clear();
       _contactController.clear();
       _locationController.clear();
       Navigator.of(context).pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error adding dealer: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error adding dealer: $e'), backgroundColor: Colors.red),
       );
     }
   }
-  // Method to delete a dealer
-  void _deleteDealer(Dealer dealer) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Delete Dealer',
-          style: TextStyle(color: primaryColor),
-        ),
-        content: Text('Are you sure you want to delete ${dealer.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Cancel', style: TextStyle(color: secondaryColor)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                await _firestore.collection('dealers').doc(dealer.id).delete();
-                Navigator.of(context).pop();
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Error deleting dealer: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: accentColor),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
+
+  void _deleteDealer(Dealer dealer) async {
+    Navigator.pop(context); // Close the dialog immediately
+    try {
+      await _firestore.collection('dealers').doc(dealer.id).delete();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting dealer: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 
   @override
@@ -218,39 +157,27 @@ class _DealersPageState extends State<DealersPage> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: Text(
-          'Dealers Management',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
+        title: const Text('Dealers Management', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         backgroundColor: primaryColor,
-        elevation: 0,
       ),
-      body:StreamBuilder<QuerySnapshot>(
-        stream: _firestore.collection('dealers').snapshots(),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _firestore.collection('dealers').orderBy('timestamp', descending: true).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
-          }
-
+          if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           }
 
-          final dealers = snapshot.data?.docs
-              .map((doc) => Dealer.fromFirestore(doc))
-              .toList() ?? [];
+          final dealers = snapshot.data?.docs.map((doc) => Dealer.fromFirestore(doc)).toList() ?? [];
 
           return dealers.isEmpty ? _buildEmptyState() : _buildDealersList(dealers);
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddDealerBottomSheet,
-        icon: Icon(Icons.add, color: Colors.white),
-        label: Text('Add Dealer', style: TextStyle(color: Colors.white)),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Dealer', style: TextStyle(color: Colors.white)),
         backgroundColor: secondaryColor,
       ),
     );
@@ -261,28 +188,11 @@ class _DealersPageState extends State<DealersPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.storefront_outlined,
-            size: 120,
-            color: primaryColor,
-          ),
+          Icon(Icons.storefront_outlined, size: 100, color: primaryColor),
           const SizedBox(height: 20),
-          Text(
-            'No Dealers Found',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: primaryColor,
-            ),
-          ),
+          Text('No Dealers Found', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: primaryColor)),
           const SizedBox(height: 10),
-          Text(
-            'Tap the "Add Dealer" button to get started',
-            style: TextStyle(
-              fontSize: 16,
-              color: secondaryColor,
-            ),
-          ),
+          Text('Tap the "Add Dealer" button to get started', style: TextStyle(fontSize: 16, color: secondaryColor)),
         ],
       ),
     );
@@ -292,89 +202,65 @@ class _DealersPageState extends State<DealersPage> {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: dealers.length,
-      itemBuilder: (context, index) {
-        final dealer = dealers[index];
-        return _buildDealerCard(dealer);
-      },
+      itemBuilder: (context, index) => _buildDealerCard(dealers[index]),
     );
   }
 
   Widget _buildDealerCard(Dealer dealer) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(15),
-      ),
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: const EdgeInsets.symmetric(vertical: 10),
-      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    dealer.name,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: primaryColor,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(dealer.name, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryColor)),
+          const SizedBox(height: 10),
+          _buildInfoRow(Icons.location_city, dealer.location),
+          const SizedBox(height: 5),
+          _buildInfoRow(Icons.phone, dealer.contactNumber),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: IconButton(
+              icon: Icon(Icons.delete_forever, color: accentColor),
+              onPressed: () => showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('Delete Dealer', style: TextStyle(color: primaryColor)),
+                  content: Text('Are you sure you want to delete ${dealer.name}?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Cancel', style: TextStyle(color: secondaryColor)),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    ElevatedButton(
+                      onPressed: () => _deleteDealer(dealer),
+                      style: ElevatedButton.styleFrom(backgroundColor: accentColor),
+                      child: const Text('Delete'),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _buildInfoRow(Icons.location_city, dealer.location),
-            const SizedBox(height: 8),
-            _buildInfoRow(Icons.phone, dealer.contactNumber),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                icon: Icon(
-                  Icons.delete_forever,
-                  color: accentColor,
-                  size: 28,
-                ),
-                onPressed: () => _deleteDealer(dealer),
               ),
             ),
-          ],
-        ),
+          )
+        ]),
       ),
     );
   }
+
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: secondaryColor,
-          size: 20,
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              color: primaryColor,
-              fontSize: 16,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
+        Icon(icon, size: 18, color: secondaryColor),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text, style: TextStyle(fontSize: 16, color: primaryColor))),
       ],
     );
   }
 
   @override
   void dispose() {
-    // Clean up controllers
     _nameController.dispose();
     _contactController.dispose();
     _locationController.dispose();
