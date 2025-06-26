@@ -11,22 +11,14 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 
 import '../Resuable_widget/Products.dart';
 import '../firebase_services/cart_services.dart';
 import '../firebase_services/firebase_service.dart';
 import '../firebase_services/image_storage.dart';
-
-// Before taking/picking images
-Future<void> requestPermissions() async {
-  final status = await Permission.storage.request();
-
-  if (status.isDenied) {
-    SnackBar(
-      content: Text("Please allow storage permission for selecting images!"),
-    );
-  }
-}
+import '../providers/cart_provider.dart';
+import '../providers/product_provider.dart';
 
 class ProductPage extends StatefulWidget {
   const ProductPage({Key? key}) : super(key: key);
@@ -36,62 +28,44 @@ class ProductPage extends StatefulWidget {
 }
 
 class _ProductPageState extends State<ProductPage> {
-
   final FirestoreService _firestoreService = FirestoreService();
-  List<Product> products = [];
-  bool isLoading = true;
+  final ImagePicker _picker = ImagePicker();
+  final Color primaryColor = Color(0xFF006A4E);
+  final Color secondaryColor = Color(0xFF00876A);
+  final Color accentColor = Color(0xFFFFA500);
+  final Color backgroundColor = Color(0xFFF5F5F5);
+
+  String? tempImagePath;
+  String? tempImageUrl;
+  List<Dealer> dealersList = [];
+  TextEditingController searchController = TextEditingController();
+  String _searchQuery = '';
+  ProductStatus? _filterStatus;
 
   @override
   void initState() {
     super.initState();
-    // Defer Firebase work to after first frame is rendered
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadProducts();
+    // Use Future.delayed to ensure context is available
+    Future.delayed(Duration.zero, () async {
+      final provider = Provider.of<ProductProvider>(context, listen: false);
+      // Avoid double-loading by only loading if needed
+      if (provider.products.isEmpty) {
+        await provider.loadProducts();
+      }
+      setState(() {}); // Ensure UI updates after load
     });
   }
 
-  // Update the _loadProducts method
-  // Optimize _loadProducts method in inventory.dart
-  Future<void> _loadProducts() async {
+  Future<void> _addNewProduct(BuildContext context, Product product) async {
+    final provider = Provider.of<ProductProvider>(context, listen: false);
     try {
-      // Don't clear cache every time, only when explicitly requested
-      final loadedProducts = await _firestoreService.getProducts();
-      setState(() {
-        products = loadedProducts;
-        isLoading = false;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading products: $e')),
-      );
-      setState(() => isLoading = false);
-    }
-  }
-
-  // Update your existing _addNewProduct method
-  Future<void> _addNewProduct(Product product) async {
-    try {
-      setState(() => isLoading = true);
-
-      // Add product to Firestore
-      String productId = await _firestoreService.addProduct(product);
-      product.id = productId;
-
-      // Update local list instead of reloading all products
-      setState(() {
-        products.add(product);
-        isLoading = false;
-      });
-
-      // Show success message
+      await provider.addProduct(product);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product added successfully')),
+          const SnackBar(content: Text('Product added successfully')),
         );
       }
-
     } catch (e) {
-      print('Error adding product: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error adding product: $e')),
@@ -100,42 +74,32 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-  // Update your existing methods to use Firestore
-  Future<void> _updateProduct(Product product) async {
+  Future<void> _updateProduct(BuildContext context, Product product) async {
     if (product.id == null) {
-      print('Error: Product ID is null');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: Product ID is missing')),
+        const SnackBar(content: Text('Error: Product ID is missing')),
       );
       return;
     }
-
+    final provider = Provider.of<ProductProvider>(context, listen: false);
     try {
-      setState(() => isLoading = true);
-      await _firestoreService.updateProduct(product.id!, product);
-      await _loadProducts(); // Reload products to ensure UI is in sync
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Product updated successfully')),
-      );
+      await provider.updateProduct(product);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Product updated successfully')),
+        );
+      }
     } catch (e) {
-      print('Error updating product: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error updating product: $e')),
-      );
-    } finally {
-      setState(() => isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating product: $e')),
+        );
+      }
     }
   }
-  // Enhanced color palette
-  final Color primaryColor = Color(0xFF006A4E); // Deep Teal
-  final Color secondaryColor = Color(0xFF00876A); // Lighter Teal
-  final Color accentColor = Color(0xFFFFA500); // Orange for alerts
-  final Color backgroundColor = Color(0xFFF5F5F5); // Light background
-
 
   Future<void> _addToCart(Product product, ProductVariation variation) async {
     try {
-      // Show dialog and wait for quantity
       final int? availableQuantity = await showDialog<int>(
         context: context,
         barrierDismissible: false,
@@ -159,17 +123,13 @@ class _ProductPageState extends State<ProductPage> {
                     border: OutlineInputBorder(),
                     helperText: 'Enter the quantity available for this item',
                   ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                  ],
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop(null); // Cancel = return null
-                },
+                onPressed: () => Navigator.of(dialogContext).pop(null),
                 child: Text('Cancel'),
               ),
               ElevatedButton(
@@ -181,7 +141,7 @@ class _ProductPageState extends State<ProductPage> {
                     );
                     return;
                   }
-                  Navigator.of(dialogContext).pop(int.parse(text)); // Return quantity
+                  Navigator.of(dialogContext).pop(int.parse(text));
                 },
                 child: Text('Add to Cart'),
               ),
@@ -190,11 +150,9 @@ class _ProductPageState extends State<ProductPage> {
         },
       );
 
-      // Handle cancel
       if (availableQuantity == null) return;
 
-      // ✅ Add to cart using CartService
-      final cartService = CartService(); // global/shared cart
+      final cartService = CartService();
       final cartItem = CartItem(
         product: product,
         variation: variation,
@@ -202,8 +160,7 @@ class _ProductPageState extends State<ProductPage> {
       );
 
       await cartService.addItem(cartItem);
-      CartManager.instance.addItem(product, variation);
-
+      context.read<CartManager>().addItem(product, variation);
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -231,47 +188,7 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-
-  // Image picker
-  final ImagePicker _picker = ImagePicker();
-  String? tempImagePath;
-
-  // Dealers list
-  List<Dealer> dealersList = [];
-
-  // Search and filter controllers
-  TextEditingController searchController = TextEditingController();
-  String _searchQuery = '';
-  ProductStatus? _filterStatus;
-
-  // Pick image from gallery
-  // Optimize gallery image picking
-  Future<void> _pickImage(Product product) async {
-    try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 90,
-      );
-
-      if (image != null) {
-        setState(() {
-          product.imagePath = image.path;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Product image updated successfully')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to pick image: $e')),
-      );
-    }
-  }
-
-  // Optimize image picking for new products
+  // Optimized: Use async/await and remove setState from image picking, use ValueNotifier for dialog reactivity
   Future<void> _pickImageFromGallery() async {
     try {
       final XFile? image = await _picker.pickImage(
@@ -281,17 +198,9 @@ class _ProductPageState extends State<ProductPage> {
         imageQuality: 85,
       );
 
-      if (image != null && mounted) {
-        final String? permanentPath = await compute(
-            ImageStorage.moveToPermStorage,
-            image.path
-        );
-
-        if (permanentPath != null && mounted) {
-          setState(() {
-            tempImagePath = permanentPath;
-          });
-        }
+      if (image != null) {
+        tempImagePath = image.path;
+        setState(() {}); // Only update if image picked
       }
     } catch (e) {
       if (mounted) {
@@ -302,7 +211,6 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-  // Show image options dialog
   void _showImageOptionsDialog(Product product) {
     showDialog(
       context: context,
@@ -327,9 +235,15 @@ class _ProductPageState extends State<ProductPage> {
               ElevatedButton.icon(
                 icon: Icon(Icons.photo_library),
                 label: Text('Select from Gallery'),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.of(context).pop();
-                  _pickImage(product);
+                  await _pickImageFromGallery();
+                  setState(() {
+                    product.imagePath = tempImagePath;
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Product image updated successfully')),
+                  );
                 },
               ),
             ],
@@ -345,82 +259,18 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  // Filter products method
-  List<Product> _filterProducts() {
-    return products.where((product) {
-      final matchesSearch =
-      product.name.toLowerCase().contains(_searchQuery.toLowerCase());
-      final matchesStatus =
-          _filterStatus == null || product.getOverallStatus() == _filterStatus;
+  List<Product> _filterProducts(ProductProvider provider) {
+    return provider.products.where((product) {
+      final matchesSearch = product.name.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchesStatus = _filterStatus == null || product.getOverallStatus() == _filterStatus;
       return matchesSearch && matchesStatus;
     }).toList();
   }
 
-  // Edit Variation Stock Dialog
-  void _showEditVariationStockDialog(
-      Product product, ProductVariation variation) {
-    final stockController =
-    TextEditingController(text: variation.stock.toString());
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Edit Stock for ${product.name} (${variation.size})'),
-          content: TextField(
-            controller: stockController,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: 'New Stock Quantity',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-                child: Text('Update'),
-                onPressed: () async {
-                  final newStock = int.tryParse(stockController.text);
-                  if (newStock != null && newStock >= 0) {
-                    try {
-                      setState(() {
-                        variation.updateStock(newStock);
-                        product.lastRestocked = DateTime.now();
-                      });
-
-                      await _updateProduct(product); // Save to Firestore
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Stock updated successfully')),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error updating stock: $e')),
-                      );
-                    }
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Please enter a valid stock quantity')),
-                    );
-                  }
-                }
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Add New Variation Dialog
   void _showAddVariationDialog(Product product) {
     final sizeController = TextEditingController();
     final stockController = TextEditingController();
     final priceController = TextEditingController();
-    // final reorderPointController = TextEditingController();
 
     showDialog(
       context: context,
@@ -467,289 +317,47 @@ class _ProductPageState extends State<ProductPage> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             ElevatedButton(
-                child: Text('Add Variation'),
-                onPressed: () async {
-                  // Validate inputs
-                  if (sizeController.text.isEmpty ||
-                      stockController.text.isEmpty ||
-                      priceController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Please fill all fields')),
-                    );
-                    return;
-                  }
+              child: Text('Add Variation'),
+              onPressed: () async {
+                if (sizeController.text.isEmpty ||
+                    stockController.text.isEmpty ||
+                    priceController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Please fill all fields')),
+                  );
+                  return;
+                }
 
-                  final newStock = int.parse(stockController.text);
-                  final newPrice = double.parse(priceController.text);
+                final newStock = int.parse(stockController.text);
+                final newPrice = double.parse(priceController.text);
 
-                  // Determine initial status
-                  ProductStatus initialStatus;
-                  if (newStock == 0) {
-                    initialStatus = ProductStatus.outOfStock;
-                  } else {
-                    initialStatus = ProductStatus.inStock;
-                  }
+                ProductStatus initialStatus = newStock == 0
+                    ? ProductStatus.outOfStock
+                    : ProductStatus.inStock;
 
-                  try {
-                    // Add new variation
-                    setState(() {
-                      product.variations.add(ProductVariation(
-                        size: sizeController.text,
-                        stock: newStock,
-                        price: newPrice,
-                        status: initialStatus,
-                      ));
-                      product.lastRestocked = DateTime.now();
-                    });
+                try {
+                  product.variations.add(ProductVariation(
+                    size: sizeController.text,
+                    stock: newStock,
+                    price: newPrice,
+                    status: initialStatus,
+                  ));
+                  product.lastRestocked = DateTime.now();
 
-                    await _updateProduct(product); // Save to Firestore
+                  final provider = Provider.of<ProductProvider>(context, listen: false);
+                  await provider.updateProduct(product);
+
+                  if (context.mounted) {
                     Navigator.of(context).pop();
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Variation added successfully')),
                     );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error adding variation: $e')),
-                    );
                   }
-                }
-
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // Add New Product Dialog with Camera Option
-  // Update _showAddProductDialog to remove camera option
-  void _showAddProductDialog() {
-    final nameController = TextEditingController();
-    final categoryController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text('Add New Product'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Image preview container
-                    Container(
-                      height: 150,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: tempImagePath != null
-                          ? ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(tempImagePath!),
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                          : Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.image, size: 50, color: Colors.grey),
-                            Text('No Image Selected'),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Gallery selection button
-                    ElevatedButton.icon(
-                      icon: Icon(Icons.photo_library),
-                      label: Text('Select from Gallery'),
-                      onPressed: () async {
-                        await _pickImageFromGallery();
-                        setDialogState(() {}); // Refresh dialog UI
-                      },
-                    ),
-                    SizedBox(height: 16),
-
-                    // Product Name field
-                    TextField(
-                      controller: nameController,
-                      decoration: InputDecoration(
-                        labelText: 'Product Name',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-
-                    // Category field
-                    TextField(
-                      controller: categoryController,
-                      decoration: InputDecoration(
-                        labelText: 'Category',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  child: Text('Cancel'),
-                  onPressed: () {
-                    setState(() {
-                      tempImagePath = null; // Clear the temporary image
-                    });
-                    Navigator.of(context).pop();
-                  },
-                ),
-                ElevatedButton(
-                  child: Text('Save'),
-                  onPressed: () async {
-                    // Validate inputs
-                    if (nameController.text.isEmpty || categoryController.text.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Please fill in all fields')),
-                      );
-                      return;
-                    }
-
-                    // Store values before clearing
-                    final productName = nameController.text;
-                    final productCategory = categoryController.text;
-                    final savedImagePath = tempImagePath;
-
-                    // Create new product
-                    final newProduct = Product(
-                      name: productName,
-                      category: productCategory,
-                      imagePath: savedImagePath,
-                      variations: [],
-                      lastRestocked: DateTime.now(),
-                    );
-
-                    // Close dialog first to prevent UI blocking
-                    Navigator.of(context).pop();
-
-                    // Add product
-                    await _addNewProduct(newProduct);
-
-                    // Clear temporary image
-                    setState(() {
-                      tempImagePath = null;
-                    });
-
-                    // Show add variation dialog after a brief delay to allow UI to settle
-                    if (mounted) {
-                      Future.microtask(() {
-                        _showAddVariationDialog(newProduct);
-                      });
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // Show dealer order dialog for a specific variation
-  void _showDealerOrderDialog(Product product, ProductVariation variation) {
-    final quantityController = TextEditingController();
-    Dealer? selectedDealer;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Order ${product.name} (${variation.size})'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Dealer Selection
-                DropdownButtonFormField<Dealer>(
-                  value: selectedDealer,
-                  decoration: InputDecoration(
-                    labelText: 'Select Dealer',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: dealersList.map((dealer) {
-                    return DropdownMenuItem<Dealer>(
-                      value: dealer,
-                      child: Text(
-                        '${dealer.name} (${dealer.location})',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (dealer) {
-                    setState(() {
-                      selectedDealer = dealer;
-                    });
-                  },
-                ),
-                SizedBox(height: 16),
-
-                // Quantity Input
-                TextField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: 'Quantity',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            ElevatedButton(
-              child: Text('Place Order'),
-              onPressed: () {
-                // Validate inputs
-                if (selectedDealer == null) {
+                } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please select a dealer')),
+                    SnackBar(content: Text('Error adding variation: $e')),
                   );
-                  return;
                 }
-
-                final quantity = int.tryParse(quantityController.text);
-                if (quantity == null || quantity <= 0) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Please enter a valid quantity')),
-                  );
-                  return;
-                }
-
-                // Update product stock
-                setState(() {
-                  variation.updateStock(variation.stock + quantity);
-                  product.lastRestocked = DateTime.now();
-                });
-
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Order placed with ${selectedDealer!.name}'),
-                  ),
-                );
               },
             ),
           ],
@@ -758,8 +366,94 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  // Delete Variation Dialog
-  // Update _deleteVariation method
+  void _showEditVariationDialog(Product product, ProductVariation variation) {
+    final TextEditingController stockController =
+    TextEditingController(text: variation.stock.toString());
+    final TextEditingController priceController =
+    TextEditingController(text: variation.price.toString());
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit ${variation.size} Variation'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: stockController,
+                decoration: InputDecoration(
+                  labelText: 'Stock Quantity',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+              SizedBox(height: 16),
+              TextField(
+                controller: priceController,
+                decoration: InputDecoration(
+                  labelText: 'Price (₹)',
+                  border: OutlineInputBorder(),
+                  prefixText: '₹',
+                ),
+                keyboardType: TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                ],
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            child: Text('Cancel'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          ElevatedButton(
+            child: Text('Save Changes'),
+            onPressed: () async {
+              int? newStock = int.tryParse(stockController.text);
+              double? newPrice = double.tryParse(priceController.text);
+
+              if (newStock == null || newPrice == null) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please enter valid values')),
+                );
+                return;
+              }
+
+              // Update variation
+              setState(() {
+                variation.stock = newStock;
+                variation.price = newPrice;
+                // Update status based on new stock level
+                if (newStock <= 0) {
+                  variation.status = ProductStatus.outOfStock;
+                } else if (newStock <= 5) {
+                  variation.status = ProductStatus.lowStock;
+                } else {
+                  variation.status = ProductStatus.inStock;
+                }
+              });
+
+              // Save changes to provider/database
+              final provider = Provider.of<ProductProvider>(context, listen: false);
+              await provider.updateProduct(product);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Variation updated successfully')),
+              );
+
+              Navigator.of(context).pop();
+              _viewProductVariations(product); // Refresh the variations view
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   void _deleteVariation(Product product, ProductVariation variation) {
     showDialog(
       context: context,
@@ -767,7 +461,8 @@ class _ProductPageState extends State<ProductPage> {
         return AlertDialog(
           title: Text('Delete Variation'),
           content: Text(
-              'Are you sure you want to delete ${variation.size} variation from ${product.name}?'),
+            'Are you sure you want to delete ${variation.size} variation from ${product.name}?',
+          ),
           actions: [
             TextButton(
               child: Text('Cancel'),
@@ -778,14 +473,18 @@ class _ProductPageState extends State<ProductPage> {
               child: Text('Delete'),
               onPressed: () async {
                 try {
-                  setState(() {
-                    product.variations.remove(variation);
-                  });
-                  await _updateProduct(product); // Save to Firestore
+                  product.variations.remove(variation);
+
+                  final provider = Provider.of<ProductProvider>(context, listen: false);
+                  await provider.updateProduct(product);
+
                   Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Variation deleted successfully')),
-                  );
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Variation deleted successfully')),
+                    );
+                  }
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text('Error deleting variation: $e')),
@@ -799,8 +498,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  // Delete Product Method
-  // Optimize delete product method in inventory.dart
   void _deleteProduct(Product product) {
     if (product.id == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -824,28 +521,23 @@ class _ProductPageState extends State<ProductPage> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: Text('Delete'),
               onPressed: () async {
-                // Close dialog immediately
                 Navigator.of(context).pop();
 
                 try {
-                  setState(() => isLoading = true);
-                  // Delete product in background
-                  await _firestoreService.deleteProduct(product.id!);
+                  final provider = Provider.of<ProductProvider>(context, listen: false);
+                  await provider.deleteProduct(product);
 
-                  // Update UI after successful deletion
-                  setState(() {
-                    products.remove(product);
-                    isLoading = false;
-                  });
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Product deleted successfully')),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Product deleted successfully')),
+                    );
+                  }
                 } catch (e) {
-                  setState(() => isLoading = false);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error deleting product: $e')),
-                  );
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error deleting product: $e')),
+                    );
+                  }
                 }
               },
             ),
@@ -855,7 +547,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  // Filter Dialog
   void _showFilterDialog() {
     showDialog(
       context: context,
@@ -914,7 +605,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-  // View variations dialog
   void _viewProductVariations(Product product) {
     showModalBottomSheet(
       context: context,
@@ -932,17 +622,14 @@ class _ProductPageState extends State<ProductPage> {
             ),
             child: Column(
               children: [
-                // Header
                 Container(
                   padding: EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: primaryColor,
-                    borderRadius:
-                    BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: Row(
                     children: [
-                      // Product image if available
                       if (product.imagePath != null)
                         Container(
                           width: 60,
@@ -956,8 +643,6 @@ class _ProductPageState extends State<ProductPage> {
                             ),
                           ),
                         ),
-
-                      // Product details
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -979,8 +664,6 @@ class _ProductPageState extends State<ProductPage> {
                           ],
                         ),
                       ),
-
-                      // Add variation button
                       IconButton(
                         icon: Icon(Icons.add_circle, color: Colors.white),
                         tooltip: 'Add Variation',
@@ -992,8 +675,6 @@ class _ProductPageState extends State<ProductPage> {
                     ],
                   ),
                 ),
-
-                // Variations list
                 Expanded(
                   child: product.variations.isEmpty
                       ? _buildEmptyVariationsView(product, context)
@@ -1007,7 +688,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-// Extract empty variations view to a separate method
   Widget _buildEmptyVariationsView(Product product, BuildContext context) {
     return Center(
       child: Column(
@@ -1036,9 +716,7 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-// Extract variations list view to a separate method
-  Widget _buildVariationsListView(
-      Product product, ScrollController scrollController) {
+  Widget _buildVariationsListView(Product product, ScrollController scrollController) {
     return ListView.builder(
       controller: scrollController,
       padding: EdgeInsets.all(16),
@@ -1050,9 +728,7 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-// Extract variation card to a separate method
-  Widget _buildVariationCard(
-      Product product, ProductVariation variation, BuildContext context) {
+  Widget _buildVariationCard(Product product, ProductVariation variation, BuildContext context) {
     Color statusColor = _getStatusColor(variation.status);
 
     return Card(
@@ -1065,7 +741,6 @@ class _ProductPageState extends State<ProductPage> {
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
-            // Variation details
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1111,8 +786,6 @@ class _ProductPageState extends State<ProductPage> {
                 ],
               ),
             ),
-
-            // Action buttons
             Column(
               children: [
                 IconButton(
@@ -1147,7 +820,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-// Helper method to get status color
   Color _getStatusColor(ProductStatus status) {
     switch (status) {
       case ProductStatus.inStock:
@@ -1161,7 +833,6 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
-// Helper method to build status badge
   Widget _buildStatusBadge(ProductStatus status, Color statusColor) {
     String statusText = status == ProductStatus.inStock
         ? 'In Stock'
@@ -1190,101 +861,6 @@ class _ProductPageState extends State<ProductPage> {
     );
   }
 
-// Create a combined edit dialog for both stock and price
-  void _showEditVariationDialog(Product product, ProductVariation variation) {
-    final TextEditingController stockController =
-    TextEditingController(text: variation.stock.toString());
-    final TextEditingController priceController =
-    TextEditingController(text: variation.price.toString());
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit ${variation.size} Variation'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: stockController,
-                decoration: InputDecoration(
-                  labelText: 'Stock Quantity',
-                  border: OutlineInputBorder(),
-                ),
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              SizedBox(height: 16),
-              TextField(
-                controller: priceController,
-                decoration: InputDecoration(
-                  labelText: 'Price (₹)',
-                  border: OutlineInputBorder(),
-                  prefixText: '₹',
-                ),
-                keyboardType: TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            child: Text('Cancel'),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          ElevatedButton(
-            child: Text('Save Changes'),
-            onPressed: () {
-              // Validate inputs
-              int? newStock = int.tryParse(stockController.text);
-              double? newPrice = double.tryParse(priceController.text);
-
-              if (newStock == null || newPrice == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Please enter valid values')),
-                );
-                return;
-              }
-
-              // Update variation
-              setState(() {
-                variation.stock = newStock;
-                variation.price = newPrice;
-
-                // Update status based on new stock level
-                if (newStock <= 0) {
-                  variation.status = ProductStatus.outOfStock;
-                } else if (newStock <= 5) {
-                  variation.status = ProductStatus.lowStock;
-                } else {
-                  variation.status = ProductStatus.inStock;
-                }
-              });
-
-              // Save changes to database
-              // _productDatabase.updateProduct(product);
-
-              // Show success message
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Variation updated successfully')),
-              );
-
-              Navigator.of(context).pop();
-              _viewProductVariations(product); // Refresh the variations view
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-// This is the previous stock-only edit dialog that we're replacing
-// Keep for reference or delete if no longer needed
-
-  // Get status label
   String _getStatusLabel(ProductStatus status) {
     switch (status) {
       case ProductStatus.inStock:
@@ -1298,10 +874,187 @@ class _ProductPageState extends State<ProductPage> {
     }
   }
 
+  // Optimized add product dialog: Use ValueNotifier for image reactivity
+  // ... (imports and class declaration remain unchanged)
+
+  // ... (imports and class declaration remain unchanged)
+
+  void _showAddProductDialog() {
+    final nameController = TextEditingController();
+    final categoryController = TextEditingController();
+    final ValueNotifier<String?> dialogImagePath = ValueNotifier<String?>(tempImagePath);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Add New Product'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ValueListenableBuilder<String?>(
+                      valueListenable: dialogImagePath,
+                      builder: (context, imagePath, _) {
+                        return Container(
+                          height: 150,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: imagePath != null
+                              ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(imagePath),
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                              : Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.image, size: 50, color: Colors.grey),
+                                Text('No Image Selected'),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.photo_library),
+                      label: Text('Select from Gallery'),
+                      onPressed: () async {
+                        final XFile? image = await _picker.pickImage(
+                          source: ImageSource.gallery,
+                          maxWidth: 800,
+                          maxHeight: 800,
+                          imageQuality: 85,
+                        );
+                        if (image != null) {
+                          dialogImagePath.value = image.path;
+                        }
+                      },
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Product Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    TextField(
+                      controller: categoryController,
+                      decoration: InputDecoration(
+                        labelText: 'Category',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  child: Text('Cancel'),
+                  onPressed: () {
+                    setState(() {
+                      tempImagePath = null;
+                      tempImageUrl = null;
+                    });
+                    Navigator.of(context).pop();
+                  },
+                ),
+                ElevatedButton(
+                  child: Text('Save'),
+                  onPressed: () async {
+                    if (nameController.text.isEmpty || categoryController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Please fill in all fields')),
+                      );
+                      return;
+                    }
+
+                    String? imageUrl;
+                    final pickedPath = dialogImagePath.value;
+                    if (pickedPath != null) {
+                      final result = await ImageStorage.uploadImageWithUrl(pickedPath);
+                      if (result != null) {
+                        imageUrl = result['downloadUrl'];
+                      }
+                    }
+
+                    final newProduct = Product(
+                      name: nameController.text,
+                      category: categoryController.text,
+                      imagePath: pickedPath,
+                      imageUrl: imageUrl,
+                      variations: [],
+                      lastRestocked: DateTime.now(),
+                    );
+
+                    final provider = Provider.of<ProductProvider>(context, listen: false);
+                    try {
+                      await provider.addProduct(newProduct);
+
+                      setState(() {
+                        tempImagePath = null;
+                        tempImageUrl = null;
+                      });
+
+                      Navigator.of(context).pop(); // Close add product dialog
+
+                      ScaffoldMessenger.of(this.context).showSnackBar(
+                        SnackBar(content: Text('Product added successfully')),
+                      );
+
+                      // Post-frame callback to open add variation dialog after the dialog is closed
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        Product? addedProduct;
+                        try {
+                          addedProduct = provider.products.firstWhere(
+                                (p) =>
+                            p.name == newProduct.name &&
+                                p.category == newProduct.category &&
+                                (p.imageUrl == newProduct.imageUrl ||
+                                    (p.imageUrl == null && newProduct.imageUrl == null)),
+                          );
+                        } catch (e) {
+                          addedProduct = null;
+                        }
+                        if (addedProduct != null) {
+                          _showAddVariationDialog(addedProduct);
+                        }
+                      });
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error adding product: $e')),
+                      );
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+// ... (rest of the file unchanged)
+
+// ... (rest of the file unchanged)
+
   @override
   Widget build(BuildContext context) {
-    // Filter products based on search query and status filter
-    final filteredProducts = _filterProducts();
+    final provider = Provider.of<ProductProvider>(context);
+    final filteredProducts = _filterProducts(provider);
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -1336,7 +1089,6 @@ class _ProductPageState extends State<ProductPage> {
       ),
       body: Column(
         children: [
-          // Search Bar
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: TextField(
@@ -1357,14 +1109,11 @@ class _ProductPageState extends State<ProductPage> {
               },
             ),
           ),
-
-          // Filter chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: EdgeInsets.symmetric(horizontal: 16),
             child: Row(
               children: [
-                // Filter status indicator
                 if (_filterStatus != null)
                   Padding(
                     padding: const EdgeInsets.only(right: 8.0),
@@ -1385,8 +1134,6 @@ class _ProductPageState extends State<ProductPage> {
               ],
             ),
           ),
-
-          // Product List
           Expanded(
             child: filteredProducts.isEmpty
                 ? Center(
@@ -1450,7 +1197,6 @@ class _ProductPageState extends State<ProductPage> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Product Image
                           GestureDetector(
                             onTap: () => _showImageOptionsDialog(product),
                             child: Container(
@@ -1461,8 +1207,7 @@ class _ProductPageState extends State<ProductPage> {
                                 borderRadius: BorderRadius.circular(8),
                                 image: product.imagePath != null
                                     ? DecorationImage(
-                                  image: FileImage(
-                                      File(product.imagePath!)),
+                                  image: FileImage(File(product.imagePath!)),
                                   fit: BoxFit.cover,
                                 )
                                     : null,
@@ -1476,12 +1221,9 @@ class _ProductPageState extends State<ProductPage> {
                             ),
                           ),
                           SizedBox(width: 16),
-
-                          // Product Info
                           Expanded(
                             child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
                                   children: [
@@ -1498,8 +1240,7 @@ class _ProductPageState extends State<ProductPage> {
                                       icon: Icon(Icons.more_vert),
                                       onSelected: (value) {
                                         if (value == 'edit') {
-                                          _showImageOptionsDialog(
-                                              product);
+                                          _showImageOptionsDialog(product);
                                         } else if (value == 'delete') {
                                           _deleteProduct(product);
                                         }
@@ -1549,12 +1290,9 @@ class _ProductPageState extends State<ProductPage> {
                                         vertical: 2,
                                       ),
                                       decoration: BoxDecoration(
-                                        color:
-                                        statusColor.withOpacity(0.1),
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: statusColor),
+                                        color: statusColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: statusColor),
                                       ),
                                       child: Text(
                                         _getStatusLabel(status),
@@ -1621,12 +1359,9 @@ class _ProductPageState extends State<ProductPage> {
                                     vertical: 2,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: accentColor
-                                        .withOpacity(0.1),
-                                    borderRadius:
-                                    BorderRadius.circular(12),
-                                    border: Border.all(
-                                        color: accentColor),
+                                    color: accentColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: accentColor),
                                   ),
                                   child: Text(
                                     'No variations - Add now',

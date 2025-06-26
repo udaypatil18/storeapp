@@ -1,3 +1,4 @@
+// ✅ OPTIMIZED VERSION OF image_storage.dart
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -9,86 +10,95 @@ class ImageStorage {
   static final _lock = Lock();
   static final _storage = FirebaseStorage.instance;
 
-  // Keep existing moveToPermStorage for backward compatibility
-  static Future<String?> moveToPermStorage(String originalPath) async {
-    try {
-      // First upload to Firebase Storage
-      final firebaseUrl = await uploadToFirebase(originalPath);
-      if (firebaseUrl == null) {
-        return null;
-      }
+  /// Uploads image to Firebase Storage and also saves a local copy.
+  // static Future<String?> moveToPermStorage(String originalPath) async {
+  //   try {
+  //     if (!await File(originalPath).exists()) {
+  //       print('Original file does not exist: $originalPath');
+  //       return null;
+  //     }
+  //
+  //     // ✅ Upload image and get Firebase URL + local path
+  //     final uploadResult = await uploadImageWithUrl(originalPath);
+  //     if (uploadResult == null) return null;
+  //
+  //     // ✅ You can choose to copy original or compressed file
+  //     final String finalLocalPath = uploadResult['localPath']!;
+  //
+  //     final Directory appDir = await getApplicationDocumentsDirectory();
+  //     final storageDir = Directory('${appDir.path}/product_images');
+  //     if (!await storageDir.exists()) await storageDir.create(recursive: true);
+  //
+  //     final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}${path.extension(finalLocalPath)}';
+  //     final permanentPath = path.join(storageDir.path, fileName);
+  //
+  //     await File(finalLocalPath).copy(permanentPath);
+  //
+  //     return permanentPath;
+  //   } catch (e, stacktrace) {
+  //     print('Error in moveToPermStorage: $e');
+  //     print(stacktrace);
+  //     return null;
+  //   }
+  // }
 
-      // For backward compatibility, also save locally
-      final File originalFile = File(originalPath);
-      if (!await originalFile.exists()) {
-        print('Original file does not exist: $originalPath');
-        return null;
-      }
 
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String storageDir = '${appDir.path}/product_images';
-
-      final Directory storageDirRef = Directory(storageDir);
-      if (!await storageDirRef.exists()) {
-        await storageDirRef.create(recursive: true);
-      }
-
-      final String fileName = 'product_${DateTime.now().millisecondsSinceEpoch}${path.extension(originalPath)}';
-      final String permanentPath = '$storageDir/$fileName';
-
-      await originalFile.copy(permanentPath);
-
-      // Return local path to maintain compatibility
-      return permanentPath;
-    } catch (e) {
-      print('Error moving image to permanent storage: $e');
-      return null;
-    }
-  }
-
-  // New method for Firebase Storage
-  static Future<String?> uploadToFirebase(String localPath) async {
+  /// Uploads a compressed image to Firebase and returns its download URL.
+  static Future<Map<String, String>?> uploadImageWithUrl(String localPath) async {
     return await _lock.synchronized(() async {
       try {
-        // Compress image before upload
+        // 1. Compress image
         final compressedFile = await _compressImage(localPath);
-        if (compressedFile == null) return null;
+        if (compressedFile == null) {
+          print('❌ Compression failed for: $localPath');
+          return null;
+        }
 
-        // Generate unique filename
+        // 2. Create unique file name and Firebase Storage ref
         final fileName = 'product_${DateTime.now().millisecondsSinceEpoch}${path.extension(localPath)}';
-        final storageRef = _storage.ref().child('products/$fileName');
+        final ref = _storage.ref().child('products/$fileName');
 
-        // Upload with metadata
+        // 3. Set metadata (safe default to 'image/jpeg' if unknown)
+        final extension = path.extension(localPath).toLowerCase().replaceAll('.', '');
+        final mimeType = ['jpg', 'jpeg', 'png', 'webp'].contains(extension)
+            ? 'image/$extension'
+            : 'image/jpeg';
+
         final metadata = SettableMetadata(
-          contentType: 'image/${path.extension(localPath).replaceAll('.', '')}',
+          contentType: mimeType,
           cacheControl: 'public, max-age=31536000',
         );
 
-        // Upload compressed file
-        final uploadTask = await storageRef.putFile(
-          File(compressedFile.path),
-          metadata,
-        );
+        // 4. Upload file
+        final uploadTask = await ref.putFile(compressedFile, metadata);
+        final downloadUrl = await uploadTask.ref.getDownloadURL();
 
-        // Clean up compressed file
+        print('✅ Uploaded $fileName to Firebase Storage');
+        print('📎 Download URL: $downloadUrl');
+
+        // 5. Clean up temp compressed file
         await _cleanupCompressedFile(compressedFile);
 
-        // Return download URL
-        return await uploadTask.ref.getDownloadURL();
-      } catch (e) {
-        print('Error uploading to Firebase Storage: $e');
+        return {
+          'localPath': compressedFile.path,
+          'downloadUrl': downloadUrl,
+        };
+      } catch (e, stack) {
+        print('❌ Error uploading image: $e');
+        print(stack);
         return null;
       }
     });
   }
 
-  // Helper method for image compression
+
+  /// Compresses the image to a temporary file.
   static Future<File?> _compressImage(String imagePath) async {
     try {
-      final Directory tempDir = await getTemporaryDirectory();
-      final targetPath = '${tempDir.path}/compressed_${path.basename(imagePath)}';
+      final tempDir = await getTemporaryDirectory();
+      final targetPath = path.join(tempDir.path, 'compressed_\${path.basename(imagePath)}');
 
-      final result = await FlutterImageCompress.compressAndGetFile(
+      final XFile? result = await FlutterImageCompress.compressAndGetFile(
         imagePath,
         targetPath,
         minWidth: 800,
@@ -97,35 +107,33 @@ class ImageStorage {
       );
 
       return result != null ? File(result.path) : null;
-    } catch (e) {
-      print('Error compressing image: $e');
+    } catch (e, stacktrace) {
+      print('Error compressing image: \$e');
+      print(stacktrace);
       return null;
     }
   }
 
-  // Helper method to clean up compressed files
+  /// Deletes the temporary compressed file if it exists.
   static Future<void> _cleanupCompressedFile(File file) async {
     try {
-      if (await file.exists()) {
-        await file.delete();
-      }
+      if (await file.exists()) await file.delete();
     } catch (e) {
-      print('Error cleaning up compressed file: $e');
+      print('Error deleting compressed file: \$e');
     }
   }
 
-  // Helper method to delete Firebase Storage image
+  /// Deletes an image from Firebase Storage using its download URL.
   static Future<bool> deleteFromFirebase(String imageUrl) async {
     return await _lock.synchronized(() async {
       try {
-        if (imageUrl.startsWith('http')) {
-          final ref = _storage.refFromURL(imageUrl);
-          await ref.delete();
-          return true;
-        }
-        return false;
-      } catch (e) {
-        print('Error deleting from Firebase Storage: $e');
+        if (!imageUrl.startsWith('http')) return false;
+        final ref = _storage.refFromURL(imageUrl);
+        await ref.delete();
+        return true;
+      } catch (e, stacktrace) {
+        print('Error deleting image from Firebase: \$e');
+        print(stacktrace);
         return false;
       }
     });

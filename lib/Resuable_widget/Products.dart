@@ -30,12 +30,11 @@ class ProductVariation {
     }
   }
 
-  // Update the method name to fromFirestore and handle the data conversion
   factory ProductVariation.fromFirestore(Map<String, dynamic> data) {
     return ProductVariation(
       size: data['size'] ?? '',
       stock: data['stock'] ?? 0,
-      price: (data['price'] ?? 0.0).toDouble(),
+      price: (data['price'] ?? 0).toDouble(),
       status: ProductStatus.values.firstWhere(
             (e) => e.toString() == data['status'],
         orElse: () => ProductStatus.outOfStock,
@@ -43,7 +42,6 @@ class ProductVariation {
     );
   }
 
-  // Update the method name to toFirestore
   Map<String, dynamic> toFirestore() {
     return {
       'size': size,
@@ -53,7 +51,6 @@ class ProductVariation {
     };
   }
 
-  // Keep the old methods for backwards compatibility
   factory ProductVariation.fromMap(Map<String, dynamic> map) =>
       ProductVariation.fromFirestore(map);
 
@@ -63,7 +60,8 @@ class ProductVariation {
 class Product {
   String? id;
   String name;
-  String? imagePath;
+  String? imagePath; // 📁 Local storage path (for caching or UI display)
+  String? imageUrl;  // 🌐 Firebase Storage URL
   String category;
   DateTime lastRestocked;
   List<ProductVariation> variations;
@@ -72,6 +70,7 @@ class Product {
     this.id,
     required this.name,
     this.imagePath,
+    this.imageUrl,
     required this.category,
     required this.lastRestocked,
     required this.variations,
@@ -91,7 +90,6 @@ class Product {
     return variations.fold(0, (sum, variation) => sum + variation.stock);
   }
 
-  // Update to handle both DocumentSnapshot and Map
   factory Product.fromFirestore(dynamic source) {
     Map<String, dynamic> data;
     String? documentId;
@@ -110,26 +108,27 @@ class Product {
       id: documentId,
       name: data['name'] ?? '',
       imagePath: data['imagePath'],
+      imageUrl: data['imageUrl'],
       category: data['category'] ?? '',
       lastRestocked: (data['lastRestocked'] as Timestamp?)?.toDate() ?? DateTime.now(),
       variations: (data['variations'] as List<dynamic>?)
           ?.map((v) => ProductVariation.fromFirestore(v as Map<String, dynamic>))
-          .toList() ?? [],
+          .toList() ??
+          [],
     );
   }
 
-  // Update method name to toFirestore and keep the same implementation
   Map<String, dynamic> toFirestore() {
     return {
       'name': name,
-      'imagePath': imagePath,
+      'imagePath': imagePath, // Optional: store only if needed locally
+      'imageUrl': imageUrl,   // ✅ Main reference for Firebase Storage
       'category': category,
       'lastRestocked': Timestamp.fromDate(lastRestocked),
       'variations': variations.map((v) => v.toFirestore()).toList(),
     };
   }
 
-  // Keep the old methods for backwards compatibility
   factory Product.fromMap(Map<String, dynamic> map) =>
       Product.fromFirestore(map);
 

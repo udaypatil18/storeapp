@@ -20,7 +20,8 @@ import 'package:mobistore/Resuable_widget/Products.dart';
 import 'package:mobistore/firebase_services/firebase_service.dart';
 import 'package:mobistore/firebase_services/cart_services.dart';
 
-
+import 'package:provider/provider.dart';
+import 'package:mobistore/providers/cart_provider.dart'; // <-- Import your provider
 
 class CartItem {
   final String? id;
@@ -59,9 +60,7 @@ class CartItem {
     );
   }
 
-
   // Convert CartItem to Firestore data
-  // Modify the toFirestore method in CartItem class
   Map<String, dynamic> toFirestore() {
     return {
       'productId': product.id,
@@ -126,12 +125,11 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
-
   // Modified _calculateTotalSelectedPrice() method with debugging
-  double _calculateTotalSelectedPrice() {
+  double _calculateTotalSelectedPrice(BuildContext context) {
     double total = 0;
-
-    for (var item in CartManager.instance.items) {
+    final cartManager = Provider.of<CartManager>(context, listen: false);
+    for (var item in cartManager.items) {
       if (item.isSelected) {
         total += (item.variation.price * item.quantity);
       }
@@ -141,8 +139,9 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Calculate total number of selected items
-  int _countSelectedItems() {
-    return CartManager.instance.items.where((item) => item.isSelected).length;
+  int _countSelectedItems(BuildContext context) {
+    final cartManager = Provider.of<CartManager>(context, listen: false);
+    return cartManager.items.where((item) => item.isSelected).length;
   }
 
   // Remove an item from cart
@@ -154,7 +153,6 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Update quantity directly
-  // Optimized cart operations
   Future<void> _updateQuantity(CartItem item, String value) async {
     final newQuantity = int.tryParse(value);
     if (newQuantity != null && newQuantity > 0) {
@@ -162,7 +160,6 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
-  // Add this method
   Future<void> _loadDealers() async {
     setState(() {
       _loadingDealers = true;
@@ -189,13 +186,13 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Generate and share order as PDF
-  Future<void> _generateAndShareOrderPdf() async {
-    if (_countSelectedItems() == 0 || selectedDealer == null) {
+  Future<void> _generateAndShareOrderPdf(BuildContext context) async {
+    if (_countSelectedItems(context) == 0 || selectedDealer == null) {
       return;
     }
-
+    final cartManager = Provider.of<CartManager>(context, listen: false);
     final selectedItems =
-    CartManager.instance.items.where((item) => item.isSelected).toList();
+    cartManager.items.where((item) => item.isSelected).toList();
 
     final pdf = pw.Document();
 
@@ -279,8 +276,6 @@ class _CartPageState extends State<CartPage> {
     await Share.shareXFiles([XFile(file.path)], text: 'Your Order Receipt');
   }
 
-
-  // Add this method to _CartPageState class
   Future<pw.Document> _generateOrderPdf(List<CartItem> items) async {
     final pdf = pw.Document();
     pdf.addPage(
@@ -366,7 +361,6 @@ class _CartPageState extends State<CartPage> {
     return pdf;
   }
 
-// Add this method to _CartPageState class
   Future<void> _createOrder(List<CartItem> items) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -398,7 +392,6 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
-
   Future<String> _cacheOrderPdf(List<CartItem> items) async {
     final pdf = await _generateOrderPdf(items);
     final output = await getTemporaryDirectory();
@@ -407,8 +400,6 @@ class _CartPageState extends State<CartPage> {
     return file.path;
   }
 
-  // Place order for selected items
-  // Update the _placeOrder method signature and implementation
   Future<void> _placeOrder() async {
     if (selectedDealer == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -553,22 +544,20 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Separate method to process purchase after dialog closes
-  void _processPurchaseOrder() {
-    _generateAndShareOrderPdf().then((_) {
+  void _processPurchaseOrder(BuildContext context) {
+    _generateAndShareOrderPdf(context).then((_) {
       if (mounted) {
         setState(() {
-          // Create a copy of the items list to avoid modification during iteration
-          final itemsToRemove = CartManager.instance.items
+          final cartManager = Provider.of<CartManager>(context, listen: false);
+          final itemsToRemove = cartManager.items
               .where((item) => item.isSelected)
               .toList();
 
-          // Remove each selected item from the cart
           for (var item in itemsToRemove) {
-            CartManager.instance.removeItem(item);
+            cartManager.removeItem(item);
           }
         });
 
-        // Show confirmation message using the saved messenger reference
         _scaffoldMessenger.showSnackBar(
           SnackBar(content: Text('Order placed successfully')),
         );
@@ -576,7 +565,6 @@ class _CartPageState extends State<CartPage> {
     });
   }
 
-  // Show dealer selection dialog
   void _showDealerSelectionDialog() {
     if (dealersList.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -632,9 +620,10 @@ class _CartPageState extends State<CartPage> {
   }
 
   // Check if all items are selected
-  bool _areAllItemsSelected() {
-    if (CartManager.instance.items.isEmpty) return false;
-    return CartManager.instance.items.every((item) => item.isSelected);
+  bool _areAllItemsSelected(BuildContext context) {
+    final cartManager = Provider.of<CartManager>(context, listen: false);
+    if (cartManager.items.isEmpty) return false;
+    return cartManager.items.every((item) => item.isSelected);
   }
 
   @override
@@ -721,7 +710,6 @@ class _CartPageState extends State<CartPage> {
               style: TextStyle(color: Colors.white),
             ),
             onPressed: () {
-              // Replace Navigator.pop with Navigator.push to go to the Products page
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => ProductPage()),
@@ -799,8 +787,7 @@ class _CartPageState extends State<CartPage> {
       }
     }
   }
-  // Cart list UI
-// In CartPage class, update only the relevant part of _buildCartList method
+
   Widget _buildCartList(List<CartItem> items) {
     return ListView.builder(
       padding: EdgeInsets.all(16),
@@ -817,13 +804,11 @@ class _CartPageState extends State<CartPage> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Checkbox for selection
                 Checkbox(
                   value: item.isSelected,
                   onChanged: (bool? value) => _updateItemSelection(item, value),
                   activeColor: primaryColor,
                 ),
-                // Product Image
                 if (item.product.imagePath != null)
                   Container(
                     width: 70,
@@ -837,7 +822,6 @@ class _CartPageState extends State<CartPage> {
                       ),
                     ),
                   ),
-                // Product details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -855,7 +839,6 @@ class _CartPageState extends State<CartPage> {
                         style: TextStyle(color: Colors.grey[600]),
                       ),
                       SizedBox(height: 4),
-                      // Add Available Quantity display here
                       Text(
                         'Available Quantity: ${item.availableQuantity ?? "Not set"}',
                         style: TextStyle(
@@ -871,7 +854,6 @@ class _CartPageState extends State<CartPage> {
                       SizedBox(height: 8),
                       Row(
                         children: [
-                          // Quantity adjustment
                           Expanded(
                             child: GestureDetector(
                               onTap: () => _showQuantityDialog(item),
@@ -903,7 +885,6 @@ class _CartPageState extends State<CartPage> {
                             ),
                           ),
                           Spacer(),
-                          // Remove button
                           IconButton(
                             icon: Icon(Icons.delete_outline, color: Colors.red,size: 20,),
                             padding: EdgeInsets.zero,
@@ -923,6 +904,7 @@ class _CartPageState extends State<CartPage> {
       },
     );
   }
+
   Widget _buildCheckoutBar() {
     return StreamBuilder<List<CartItem>>(
       stream: _cartStream,
@@ -993,52 +975,11 @@ class _CartPageState extends State<CartPage> {
       },
     );
   }
+
   @override
   void dispose() {
-    // No context-dependent operations here
     super.dispose();
   }
 }
 
-// Cart Manager (Singleton)
-class CartManager {
-  // Singleton instance
-  static final CartManager _instance = CartManager._internal();
-  static CartManager get instance => _instance;
-
-  CartManager._internal();
-
-  // List to store cart items
-  List<CartItem> items = [];
-
-  // Add item to cart
-  void addItem(Product product, ProductVariation variation) {
-    // Check if item already exists in cart
-    final existingItemIndex = items.indexWhere(
-          (item) =>
-      item.product.id == product.id &&
-          item.variation.size == variation.size,
-    );
-
-    if (existingItemIndex != -1) {
-      // If item exists, increase quantity
-      items[existingItemIndex].quantity++;
-    } else {
-      // Otherwise add new item
-      items.add(CartItem(
-        product: product,
-        variation: variation,
-      ));
-    }
-  }
-
-  // Remove item from cart
-  void removeItem(CartItem item) {
-    items.remove(item);
-  }
-
-  // Clear cart
-  void clearCart() {
-    items.clear();
-  }
-}
+// Remove the old singleton CartManager from this file! Provider version is in providers/cart_provider.dart.
