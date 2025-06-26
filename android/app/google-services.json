@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "603817842853",
-    "project_id": "mobistore-bd4d3",
-    "storage_bucket": "mobistore-bd4d3.firebasestorage.app"
+    "project_number": "266428392092",
+    "project_id": "mobi-store-a082c",
+    "storage_bucket": "mobi-store-a082c.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:603817842853:android:62f4bc1444194dda68954c",
+        "mobilesdk_app_id": "1:266428392092:android:186d0f5fa6c61c0cc24359",
         "android_client_info": {
           "package_name": "com.example.mobistore"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAtBAYmP1L9vspEQboYElIL5tByr_KGP54"
+          "current_key": "AIzaSyBimJcHxOP4n3B3QZV1LePDvBh4fMILghE"
         }
       ],
       "services": {
